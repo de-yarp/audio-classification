@@ -23,6 +23,8 @@ class ReprType(Enum):
 
 ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
+LOGS_DIR_PATH = Path("logs")
+LOG_NAME = "log.jsonl"
 
 
 class AudioDataset(torch.utils.data.Dataset):

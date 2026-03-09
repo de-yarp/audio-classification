@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-import pandas as pd  # noqa: F401
 import yaml
 
 from .data_models import FeatureConfig
