@@ -1,0 +1,38 @@
+from pathlib import Path
+
+import numpy as np
+import pandas as pd  # noqa: F401
+import yaml
+
+from .data_models import FeatureConfig
+
+
+def load_feature_config(path: Path) -> FeatureConfig:
+    with path.open(mode="r") as f:
+        cfg = yaml.safe_load(f)
+
+    return FeatureConfig(
+        n_fft=cfg["n_fft"],
+        hop_length=cfg["hop_length"],
+        n_mels=cfg["n_mels"],
+        n_mfcc=cfg["n_mfcc"],
+        include_deltas=cfg["include_deltas"],
+    )
+
+
+def save_features_npy(
+    mel_spec: np.ndarray, mfcc: np.ndarray, out_dir: Path, file_name: str
+) -> None:
+    mel_dir = out_dir / "mel"
+    mfcc_dir = out_dir / "mfcc"
+    mel_dir.mkdir(exist_ok=True, parents=True)
+    mfcc_dir.mkdir(exist_ok=True, parents=True)
+
+    # fout_mel = mel_dir / f"mel_{file_name}.npy"
+    # fout_mfcc = mfcc_dir / f"mfcc_{file_name}.npy"
+
+    fout_mel = mel_dir / f"{file_name}.npy"
+    fout_mfcc = mfcc_dir / f"{file_name}.npy"
+
+    np.save(fout_mel, mel_spec)
+    np.save(fout_mfcc, mfcc)

@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# Data (ignore heavy files, keep directory structure via .gitkeep)
+*.wav
+*.npy
+*.npz
+*.csv
+*.xlsx
+
+# Sandbox (local experimentation, not for repo)
+sandbox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model artifacts
+*.pt
+*.pth
+
+# Training outputs(if any)
+runs/
+checkpoints/
+wandb/

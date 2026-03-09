@@ -1,0 +1,5 @@
+n_fft: 2048
+hop_length: 512
+n_mels: 128
+n_mfcc: 40
+include_deltas: true
