@@ -14,6 +14,11 @@ def get_features_esc50(
     out_dir: Path = ESC_50_PROCESSED_PATH,
     cfg_path: Path = Path("config") / "features.yaml",
 ) -> None:
+    for d in (out_dir / "mel", out_dir / "mfcc"):
+        if next(d.glob("*.npy"), None) is not None:
+            msg = f"{d} already contains processed files, expected empty or nonexistent out_dir"
+            raise FileExistsError(msg)
+
     cfg = load_feature_config(cfg_path)
     for path in in_dir.glob("*.wav"):
         audio, sr = lbr.load(path)
