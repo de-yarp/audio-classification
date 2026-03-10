@@ -9,5 +9,17 @@ dependencies = [
     "numpy>=2.4.2",
     "pandas>=3.0.1",
     "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
     "torch>=2.10.0",
 ]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["infra*", "models*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long-running tests"]

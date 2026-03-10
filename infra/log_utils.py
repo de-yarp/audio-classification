@@ -5,7 +5,7 @@ import logging.handlers
 import sys
 from typing import Any, override
 
-from data_models import LOG_NAME, LOGS_DIR_PATH
+from .data_models import LOG_NAME, LOGS_DIR_PATH
 
 
 def now_ts_iso() -> str:
