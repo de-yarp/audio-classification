@@ -3,7 +3,7 @@ name = "audio-classification"
 version = "0.1.0"
 description = "2 models 2 represetations = 4 experiments"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12, <3.13"
 dependencies = [
     "librosa>=0.11.0",
     "matplotlib>=3.10.8",
