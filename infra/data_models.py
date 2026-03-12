@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
+import yaml
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,15 @@ class FeatureConfig:
     n_mels: int
     n_mfcc: int
     include_deltas: bool
+
+    @classmethod
+    def from_yaml(cls, path: Path):
+        with path.open(mode="r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        inner_keys = {f.name for f in fields(cls)}
+        data = {k: v for k, v in cfg.items() if k in inner_keys}
+
+        return cls(**data)
 
 
 class ReprType(Enum):
