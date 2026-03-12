@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from infra.io_utils import load_feature_config
+from infra.data_models import FeatureConfig
 from infra.preprocessing import get_features_esc50
 
 
@@ -23,7 +23,7 @@ class TestPreprocessing:
         get_features_esc50(out_dir=request.cls.tmp_root, cfg_path=request.cls.cfg_path)
 
     def test_shape(self) -> None:
-        cfg = load_feature_config(self.cfg_path)
+        cfg = FeatureConfig.from_yaml(self.cfg_path)
         mel_spec = np.load(next(self.mel_dir.glob("*.npy")))
         assert mel_spec.shape[0] == cfg.n_mels
         mfcc_spec = np.load(next(self.mfcc_dir.glob("*.npy")))

@@ -1,22 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-import yaml
-
-from .data_models import FeatureConfig
-
-
-def load_feature_config(path: Path) -> FeatureConfig:
-    with path.open(mode="r") as f:
-        cfg = yaml.safe_load(f)
-
-    return FeatureConfig(
-        n_fft=cfg["n_fft"],
-        hop_length=cfg["hop_length"],
-        n_mels=cfg["n_mels"],
-        n_mfcc=cfg["n_mfcc"],
-        include_deltas=cfg["include_deltas"],
-    )
 
 
 def save_features_npy(

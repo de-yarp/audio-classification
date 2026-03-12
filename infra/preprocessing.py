@@ -6,7 +6,7 @@ import numpy as np
 from infra.data_models import FeatureConfig
 
 from .data_models import ESC_50_PROCESSED_PATH, ESC_50_RAW_PATH
-from .io_utils import load_feature_config, save_features_npy
+from .io_utils import save_features_npy
 
 
 def get_features_esc50(
@@ -19,7 +19,7 @@ def get_features_esc50(
             msg = f"{d} already contains processed files, expected empty or nonexistent out_dir"
             raise FileExistsError(msg)
 
-    cfg = load_feature_config(cfg_path)
+    cfg = FeatureConfig.from_yaml(cfg_path)
     for path in in_dir.glob("*.wav"):
         audio, sr = lbr.load(path)
         mel_spec, mfcc = _compute_features_esc50(audio, sr, cfg)
