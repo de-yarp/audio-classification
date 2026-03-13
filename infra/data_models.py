@@ -32,6 +32,11 @@ class ReprType(Enum):
     MFCC = "mfcc"
 
 
+class ModelType(Enum):
+    CNN = "cnn"
+    LSTM = "lstm"
+
+
 ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
 LOGS_DIR_PATH = Path("logs")
@@ -83,6 +88,8 @@ class AudioDataset(torch.utils.data.Dataset):
 
 @dataclass(frozen=True)
 class ConfigCNN:
+    model_type: ModelType
+    repr_type: ReprType
     conv_kernel_count: int
     conv_kernel_size: int
     conv_stride: int
@@ -107,6 +114,9 @@ class ConfigCNN:
             section_data = cfg.get(section, {})
             data.update({k: v for k, v in section_data.items() if k in inner_keys})
 
+        data["model_type"] = ModelType(data["model_type"])
+        data["repr_type"] = ReprType(data["repr_type"])
+
         return cls(**data)
 
 
@@ -114,6 +124,8 @@ class ConfigCNN:
 class ConfigLSTM:
     """TODO: finish the config class for arguments lstm needs"""
 
+    model_type: ModelType
+    repr_type: ReprType
     num_classes: int
     num_epochs: int
     optimizer: str
@@ -131,5 +143,8 @@ class ConfigLSTM:
         for section in ["model", "run"]:
             section_data = cfg.get(section, {})
             data.update({k: v for k, v in section_data.items() if k in inner_keys})
+
+        data["model_type"] = ModelType(data["model_type"])
+        data["repr_type"] = ReprType(data["repr_type"])
 
         return cls(**data)
