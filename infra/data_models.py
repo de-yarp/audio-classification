@@ -71,3 +71,57 @@ class AudioDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         return (torch.from_numpy(self.samples[idx]), self.labels[idx])
+
+
+@dataclass(frozen=True)
+class ConfigCNN:
+    conv_kernel_count: int
+    conv_kernel_size: int
+    conv_stride: int
+    conv_padding: int
+    pool_kernel_size: int
+    pool_stride: int
+    pool_padding: int
+    num_classes: int
+    num_epochs: int
+    optimizer: str
+    lr: float
+    momentum: float | None
+
+    @classmethod
+    def from_yaml(cls, path: Path):
+        with path.open(mode="r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        inner_keys = {f.name for f in fields(cls)}
+        data = {}
+
+        for section in ["model", "run"]:
+            section_data = cfg.get(section, {})
+            data.update({k: v for k, v in section_data.items() if k in inner_keys})
+
+        return cls(**data)
+
+
+@dataclass(frozen=True)
+class ConfigLSTM:
+    """TODO: finish the config class for arguments lstm needs"""
+
+    num_classes: int
+    num_epochs: int
+    optimizer: str
+    lr: float
+    momentum: float | None
+    ...
+
+    @classmethod
+    def from_yaml(cls, path: Path):
+        with path.open(mode="r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        inner_keys = {f.name for f in fields(cls)}
+        data = {}
+
+        for section in ["model", "run"]:
+            section_data = cfg.get(section, {})
+            data.update({k: v for k, v in section_data.items() if k in inner_keys})
+
+        return cls(**data)
