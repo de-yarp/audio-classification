@@ -88,6 +88,7 @@ class AudioDataset(torch.utils.data.Dataset):
 
 @dataclass(frozen=True)
 class ConfigCNN:
+    # model config
     model_type: ModelType
     repr_type: ReprType
     conv_kernel_count: int
@@ -97,7 +98,12 @@ class ConfigCNN:
     pool_kernel_size: int
     pool_stride: int
     pool_padding: int
+
+    # run config
     num_classes: int
+    batch_size: int
+    folds_train: list[int]
+    folds_val: list[int]
     num_epochs: int
     optimizer: str
     lr: float
@@ -124,9 +130,15 @@ class ConfigCNN:
 class ConfigLSTM:
     """TODO: finish the config class for arguments lstm needs"""
 
+    # model config
     model_type: ModelType
     repr_type: ReprType
+
+    # run config
     num_classes: int
+    batch_size: int
+    folds_train: list[int]
+    folds_val: list[int]
     num_epochs: int
     optimizer: str
     lr: float
