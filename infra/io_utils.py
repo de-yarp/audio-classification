@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 
 def save_features_npy(
@@ -19,3 +20,15 @@ def save_features_npy(
 
     np.save(fout_mel, mel_spec)
     np.save(fout_mfcc, mfcc)
+
+
+def load_yaml_config(path: Path) -> dict:
+    def _flatten(cfg_raw: dict) -> dict:
+        return cfg_raw["model"] | cfg_raw["run"]
+
+    with path.open("r", encoding="utf-8") as f:
+        cfg_dict = yaml.safe_load(f)
+
+    cfg_dict_flat = _flatten(cfg_dict)
+
+    return cfg_dict_flat
