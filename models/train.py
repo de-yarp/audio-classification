@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -14,11 +16,14 @@ from infra.data_models import (
     ModelType,
     ReprType,
 )
+from infra.log_utils import make_emit
 
 from .cnn_mel import MEL_CNN
 from .cnn_mfcc import MFCC_CNN
 from .lstm_mel import MEL_LSTM
 from .lstm_mfcc import MFCC_LSTM
+
+COMPONENT = __name__
 
 
 def _get_model_type_from_yaml(path: Path) -> tuple[ModelType, ReprType]:
@@ -78,8 +83,11 @@ def _setup_model(cfg_path: Path) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
 
 
 def run_validation(
-    net: nn.Module, val_loader: DataLoader, criterion: nn.CrossEntropyLoss
-) -> None:
+    net: nn.Module,
+    val_loader: DataLoader,
+    criterion: nn.CrossEntropyLoss,
+    emit: Callable[[str, str, str, dict], None],
+) -> tuple[float, float]:
     net.eval()
     val_loss = 0.0
 
@@ -97,10 +105,22 @@ def run_validation(
     accuracy_pct = (correct / total) * 100
     avg_loss = val_loss / len(val_loader)
 
-    print(f"Validation loss: {avg_loss:.3f}, accuracy: {accuracy_pct:.3f}")
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="validation",
+        payload={
+            "avg_loss": round(avg_loss, 4),
+            "accuracy_pct": round(accuracy_pct, 4),
+        },
+    )
+
+    return avg_loss, accuracy_pct
 
 
-def training_loop(cfg_path: Path):
+def training_loop(cfg_path: Path, *, logger: logging.Logger, run_id: str):
+    emit = make_emit(logger, run_id)
+
     net, cfg = _setup_model(cfg_path)
 
     criterion = nn.CrossEntropyLoss()
@@ -111,6 +131,9 @@ def training_loop(cfg_path: Path):
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=cfg.batch_size, shuffle=False)
 
+    avg_loss_last_train_epoch = 0.0
+    avg_loss_val = 0.0
+    accuracy_val_pct = 0.0
     for epoch in range(cfg.num_epochs):
         running_loss = 0.0
 
@@ -126,9 +149,31 @@ def training_loop(cfg_path: Path):
             optimizer.step()
 
             running_loss += loss.item()
-            print(f"[{epoch + 1}, {i + 1:5d}] loss: {running_loss:.3f}")
-            running_loss = 0.0
 
-        run_validation(net, val_loader, criterion)
+            emit(
+                level="INFO",
+                component=COMPONENT,
+                event="training_process",
+                payload={
+                    "epoch": epoch + 1,
+                    "batch": i + 1,
+                    "loss": round(loss.item(), 4),
+                },
+            )
 
-    print("Finished Training")
+        avg_loss_last_train_epoch = running_loss / len(train_loader)
+
+        avg_loss_val, accuracy_val_pct = run_validation(
+            net, val_loader, criterion, emit
+        )
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="training_finished",
+        payload={
+            "avg_loss_last_train_epoch": round(avg_loss_last_train_epoch, 4),
+            "avg_loss_val": round(avg_loss_val, 4),
+            "accuracy_val_pct": round(accuracy_val_pct, 4),
+        },
+    )
