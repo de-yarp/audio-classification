@@ -110,18 +110,9 @@ class ConfigCNN:
     momentum: float | None
 
     @classmethod
-    def from_yaml(cls, path: Path):
-        with path.open(mode="r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
+    def from_dict(cls, input: dict):
         inner_keys = {f.name for f in fields(cls)}
-        data = {}
-
-        for section in ["model", "run"]:
-            section_data = cfg.get(section, {})
-            data.update({k: v for k, v in section_data.items() if k in inner_keys})
-
-        data["model_type"] = ModelType(data["model_type"])
-        data["repr_type"] = ReprType(data["repr_type"])
+        data = {k: v for k, v in input.items() if k in inner_keys}
 
         return cls(**data)
 
@@ -146,17 +137,14 @@ class ConfigLSTM:
     ...
 
     @classmethod
-    def from_yaml(cls, path: Path):
-        with path.open(mode="r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
+    def from_dict(cls, input: dict):
         inner_keys = {f.name for f in fields(cls)}
-        data = {}
-
-        for section in ["model", "run"]:
-            section_data = cfg.get(section, {})
-            data.update({k: v for k, v in section_data.items() if k in inner_keys})
-
-        data["model_type"] = ModelType(data["model_type"])
-        data["repr_type"] = ReprType(data["repr_type"])
+        data = {k: v for k, v in input.items() if k in inner_keys}
 
         return cls(**data)
+
+
+MODEL_CONFIG_MAP: dict[ModelType, type[ConfigCNN] | type[ConfigLSTM]] = {
+    ModelType.CNN: ConfigCNN,
+    ModelType.LSTM: ConfigLSTM,
+}

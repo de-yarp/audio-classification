@@ -5,7 +5,6 @@ from typing import Callable
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import yaml
 from torch.utils.data import DataLoader
 
 from infra.data_models import (
@@ -26,28 +25,6 @@ from .lstm_mfcc import MFCC_LSTM
 COMPONENT = __name__
 
 
-def _get_model_type_from_yaml(path: Path) -> tuple[ModelType, ReprType]:
-    with path.open("r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-    model_cfg = cfg["model"]
-    model_type_str = model_cfg["model_type"].lower()
-    repr_type_str = model_cfg["repr_type"].lower()
-
-    try:
-        model_type = ModelType(model_type_str)
-    except ValueError as e:
-        msg = f"invalid model.type '{model_type_str}' in config {path}, expected {[e.value for e in ModelType]}"
-        raise ValueError(msg) from e
-
-    try:
-        repr_type = ReprType(repr_type_str)
-    except ValueError as e:
-        msg = f"invalid model.repr_type '{repr_type_str}' in config {path}, expected {[e.value for e in ReprType]}"
-        raise ValueError(msg) from e
-
-    return model_type, repr_type
-
-
 def _setup_optimizer(
     net: nn.Module, cfg: ConfigCNN | ConfigLSTM, cfg_path: Path
 ) -> optim.Optimizer:
@@ -62,18 +39,19 @@ def _setup_optimizer(
     return opt_class(params=net.parameters(), lr=cfg.lr)
 
 
-def _setup_model(cfg_path: Path) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
-    model_type, repr_type = _get_model_type_from_yaml(cfg_path)
+def _setup_model(cfg_dict: dict) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
+    model_type = cfg_dict["model_type"]
+    repr_type = cfg_dict["repr_type"]
 
     if model_type == ModelType.CNN:
-        cfg = ConfigCNN.from_yaml(cfg_path)
+        cfg = ConfigCNN.from_dict(cfg_dict)
         if repr_type == ReprType.MFCC:
             net = MFCC_CNN(cfg=cfg)
         elif repr_type == ReprType.MEL:
             net = MEL_CNN(cfg=cfg)
 
     elif model_type == ModelType.LSTM:
-        cfg = ConfigLSTM.from_yaml(cfg_path)
+        cfg = ConfigLSTM.from_dict(cfg_dict)
         if repr_type == ReprType.MFCC:
             net = MFCC_LSTM(cfg=cfg)
         elif repr_type == ReprType.MEL:
@@ -118,10 +96,12 @@ def run_validation(
     return avg_loss, accuracy_pct
 
 
-def training_loop(cfg_path: Path, *, logger: logging.Logger, run_id: str):
+def training_loop(
+    cfg_dict: dict, cfg_path: Path, *, logger: logging.Logger, run_id: str
+):
     emit = make_emit(logger, run_id)
 
-    net, cfg = _setup_model(cfg_path)
+    net, cfg = _setup_model(cfg_dict)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = _setup_optimizer(net, cfg, cfg_path)
