@@ -3,7 +3,7 @@ import json
 import logging
 import logging.handlers
 import sys
-from typing import Any, override
+from typing import Any, Callable, override
 
 from .data_models import LOG_NAME, LOGS_DIR_PATH
 
@@ -22,14 +22,16 @@ class JSONFormatter(logging.Formatter):
         obj = {
             "ts": now_ts_iso(),
             "level": rec.levelname,
-            "name": rec.name,
             "event": rec.getMessage(),
         }
 
         run_id = getattr(rec, "run_id", None)
+        component = getattr(rec, "component", None)
         payload = getattr(rec, "payload", None)
         if run_id:
             obj["run_id"] = run_id
+        if component:
+            obj["component"] = component
         if payload and isinstance(payload, dict):
             obj.update(payload)
 
@@ -55,6 +57,21 @@ def setup_logger(level: int = logging.INFO) -> logging.Logger:
     logger.addHandler(h_err)
 
     return logger
+
+
+def make_emit(
+    logger: logging.Logger, run_id: str
+) -> Callable[[str, str, str, dict], None]:
+    LEVELS_MAP = {"INFO": logging.INFO, "WARN": logging.WARNING, "ERROR": logging.ERROR}
+
+    def emit(level: str, component: str, event: str, payload: dict) -> None:
+        logger.log(
+            level=LEVELS_MAP.get(level.upper(), logging.INFO),
+            msg=event,
+            extra={"run_id": run_id, "component": component, "payload": payload},
+        )
+
+    return emit
 
 
 def parse_run_logs(run_id: str) -> list[dict[str, Any]]:
