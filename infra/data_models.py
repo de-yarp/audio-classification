@@ -37,17 +37,15 @@ class ModelType(Enum):
     LSTM = "lstm"
 
 
+class CNNLayers(Enum):
+    CONV = "conv"
+    POOL = "pool"
+
+
 ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
 LOGS_DIR_PATH = Path("logs")
 LOG_NAME = "log.jsonl"
-
-
-OPTIMIZER_MAP: dict[str, type[optim.Optimizer]] = {
-    "SGD": optim.SGD,
-    "ADAM": optim.Adam,
-    "ADAMW": optim.AdamW,
-}
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -87,17 +85,28 @@ class AudioDataset(torch.utils.data.Dataset):
 
 
 @dataclass(frozen=True)
+class LayerConv:
+    kernel_count: int
+    kernel_size: int
+    stride: int
+    padding: int
+    batch_norm: bool = False
+
+
+@dataclass(frozen=True)
+class LayerPool:
+    kernel_size: int
+    stride: int
+    padding: int
+
+
+@dataclass(frozen=True)
 class ConfigCNN:
     # model config
     model_type: ModelType
     repr_type: ReprType
-    conv_kernel_count: int
-    conv_kernel_size: int
-    conv_stride: int
-    conv_padding: int
-    pool_kernel_size: int
-    pool_stride: int
-    pool_padding: int
+    conv_layers: list[LayerConv | LayerPool]
+    fc_layers: list[int]
 
     # run config
     num_classes: int
@@ -144,7 +153,19 @@ class ConfigLSTM:
         return cls(**data)
 
 
+OPTIMIZER_MAP: dict[str, type[optim.Optimizer]] = {
+    "SGD": optim.SGD,
+    "ADAM": optim.Adam,
+    "ADAMW": optim.AdamW,
+}
+
+
 MODEL_CONFIG_MAP: dict[ModelType, type[ConfigCNN] | type[ConfigLSTM]] = {
     ModelType.CNN: ConfigCNN,
     ModelType.LSTM: ConfigLSTM,
+}
+
+CNN_LAYER_MAP: dict[CNNLayers, type[LayerConv] | type[LayerPool]] = {
+    CNNLayers.CONV: LayerConv,
+    CNNLayers.POOL: LayerPool,
 }

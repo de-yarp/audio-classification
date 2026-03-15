@@ -1,14 +1,42 @@
 from dataclasses import fields
 from pathlib import Path
+from typing import get_type_hints
 
 from infra.data_models import (
+    CNN_LAYER_MAP,
     MODEL_CONFIG_MAP,
+    CNNLayers,
+    LayerConv,
+    LayerPool,
     ModelType,
     ReprType,
 )
 
 
-def normalize_config(cfg: dict, path: Path) -> dict:
+def _validate_cnn_layers(val: dict, key: str, path: Path):
+    new_layers = []
+    for l_idx, layer in enumerate(val, 0):
+        l_type_str = layer["type"].lower()
+        try:
+            l_type = CNNLayers(l_type_str)
+            layer_class = CNN_LAYER_MAP[l_type]
+        except ValueError as e:
+            msg = f"invalid model.layers.[{l_idx}] '{l_type_str}' in config {path}, expected {[e.value for e in CNNLayers]}"
+            raise ValueError(msg) from e
+
+        new_layer = {}
+        for f1 in fields(layer_class):
+            val_1 = layer[f1.name]
+            assert isinstance(val_1, f1.type), (
+                f"invalid key type {path.stem}.[model/run].{key}.{f1.name}: '{type(val_1)}', expected '{f1.type}'"
+            )
+            new_layer[f1.name] = val_1
+
+        new_layers.append(layer_class(**new_layer))
+    return new_layers
+
+
+def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     model_type_str = cfg["model_type"].strip().lower()
     repr_type_str = cfg["repr_type"].strip().lower()
     optimizer_str = cfg["optimizer"].strip().upper()
@@ -30,14 +58,29 @@ def normalize_config(cfg: dict, path: Path) -> dict:
 
     cfg_class = MODEL_CONFIG_MAP[model_type]
 
+    cfg_class_types = get_type_hints(cfg_class)
+
     for f in fields(cfg_class):
         key = f.name
-        k_type = f.type
+        k_type = cfg_class_types[key]
 
         if key not in cfg:
             raise KeyError(f"missing key {path.stem}.[model/run].{key}")
         val = cfg[key]
-        if k_type not in (list[int], float | None):
+
+        if k_type == list[LayerConv | LayerPool]:
+            cfg[key] = _validate_cnn_layers(val, key, path)
+
+        elif k_type == list[int]:
+            for i in val:
+                assert isinstance(i, int)
+
+        elif k_type == float | None:
+            assert isinstance(val, float) or val is None, (
+                f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
+            )
+
+        else:
             assert isinstance(val, k_type), (
                 f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
             )
