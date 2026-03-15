@@ -9,13 +9,14 @@ from torch.utils.data import DataLoader
 
 from infra.data_models import (
     OPTIMIZER_MAP,
+    ArgsCLI,
     AudioDataset,
     ConfigCNN,
     ConfigLSTM,
     ModelType,
     ReprType,
 )
-from infra.log_utils import make_emit
+from infra.log_utils import make_emit, now_ts_iso
 
 from .cnn_mel import MEL_CNN
 from .cnn_mfcc import MFCC_CNN
@@ -86,7 +87,7 @@ def run_validation(
     emit(
         level="INFO",
         component=COMPONENT,
-        event="validation",
+        event="validation_result",
         payload={
             "avg_loss": round(avg_loss, 4),
             "accuracy_pct": round(accuracy_pct, 4),
@@ -97,14 +98,20 @@ def run_validation(
 
 
 def training_loop(
-    cfg_dict: dict, cfg_path: Path, *, logger: logging.Logger, run_id: str
-):
+    cfg_dict: dict, *, logger: logging.Logger, run_id: str, args: ArgsCLI
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict]:
     emit = make_emit(logger, run_id)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="start_training",
+    )
 
     net, cfg = _setup_model(cfg_dict)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = _setup_optimizer(net, cfg, cfg_path)
+    optimizer = _setup_optimizer(net, cfg, args.cfg_path)
 
     train_ds = AudioDataset(cfg.repr_type, folds=cfg.folds_train)
     val_ds = AudioDataset(cfg.repr_type, folds=cfg.folds_val)
@@ -133,7 +140,7 @@ def training_loop(
             emit(
                 level="INFO",
                 component=COMPONENT,
-                event="training_process",
+                event="batch_loss",
                 payload={
                     "epoch": epoch + 1,
                     "batch": i + 1,
@@ -150,10 +157,20 @@ def training_loop(
     emit(
         level="INFO",
         component=COMPONENT,
-        event="training_finished",
+        event="finish_training",
         payload={
             "avg_loss_last_train_epoch": round(avg_loss_last_train_epoch, 4),
             "avg_loss_val": round(avg_loss_val, 4),
             "accuracy_val_pct": round(accuracy_val_pct, 4),
         },
     )
+
+    content = {
+        "ts": now_ts_iso(),
+        "run_id": run_id,
+        "avg_loss_last_train_epoch": round(avg_loss_last_train_epoch, 4),
+        "avg_loss_val": round(avg_loss_val, 4),
+        "accuracy_val_pct": round(accuracy_val_pct, 4),
+    }
+
+    return net, cfg, content

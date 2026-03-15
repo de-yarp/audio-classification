@@ -1,0 +1,42 @@
+model:
+  model_type: "cnn"
+  repr_type: "mfcc"
+  conv_layers:
+    - type: "conv"
+      kernel_count: 16
+      kernel_size: 3
+      stride: 1
+      padding: 0
+      batch_norm: True
+    - type: "pool"
+      kernel_size: 2
+      stride: 2
+      padding: 0
+    - type: "conv"
+      kernel_count: 32
+      kernel_size: 3
+      stride: 1
+      padding: 0
+      batch_norm: True
+    - type: "pool"
+      kernel_size: 2
+      stride: 2
+      padding: 0
+  fc_layers:
+    - 512
+    - 128
+  num_classes: 50
+
+run:
+  seed: 42
+  folds_train:
+    - 1
+    - 2
+    - 3
+  folds_val:
+    - 4
+  batch_size: 32
+  num_epochs: 2
+  optimizer: "SGD"
+  lr: 0.001
+  momentum: null

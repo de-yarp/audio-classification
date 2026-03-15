@@ -64,7 +64,7 @@ def make_emit(
 ) -> Callable[[str, str, str, dict], None]:
     LEVELS_MAP = {"INFO": logging.INFO, "WARN": logging.WARNING, "ERROR": logging.ERROR}
 
-    def emit(level: str, component: str, event: str, payload: dict) -> None:
+    def emit(level: str, component: str, event: str, payload: dict = {}) -> None:
         logger.log(
             level=LEVELS_MAP.get(level.upper(), logging.INFO),
             msg=event,
@@ -87,8 +87,3 @@ def parse_run_logs(run_id: str) -> list[dict[str, Any]]:
                     run_logs.append(json_line)
 
     return run_logs
-
-
-def run_map_csv():
-    """saves all the run's details to a .csv to keep legacy runs' data, id=run_id(uuid)"""
-    ...

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 
@@ -46,6 +46,8 @@ ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
 LOGS_DIR_PATH = Path("logs")
 LOG_NAME = "log.jsonl"
+MODEL_CHECKPOINTS_DIR_PATH = Path("runs") / "checkpoints"
+MODEL_CONFIGS_DIR_PATH = Path("runs") / "configs"
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -91,6 +93,7 @@ class LayerConv:
     stride: int
     padding: int
     batch_norm: bool = False
+    type: str = "conv"
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,7 @@ class LayerPool:
     kernel_size: int
     stride: int
     padding: int
+    type: str = "conv"
 
 
 @dataclass(frozen=True)
@@ -107,9 +111,10 @@ class ConfigCNN:
     repr_type: ReprType
     conv_layers: list[LayerConv | LayerPool]
     fc_layers: list[int]
+    num_classes: int
 
     # run config
-    num_classes: int
+    seed: int
     batch_size: int
     folds_train: list[int]
     folds_val: list[int]
@@ -125,6 +130,41 @@ class ConfigCNN:
 
         return cls(**data)
 
+    def to_dict(self) -> dict:
+        model_keys = {
+            "model_type",
+            "repr_type",
+            "conv_layers",
+            "fc_layers",
+            "num_classes",
+        }
+        run_keys = {
+            "seed",
+            "batch_size",
+            "folds_train",
+            "folds_val",
+            "num_epochs",
+            "optimizer",
+            "lr",
+            "momentum",
+        }
+        raw_dict = asdict(self)
+        model_dict = {}
+        run_dict = {}
+        for k, v in raw_dict.items():
+            if k in model_keys:
+                if isinstance(v, Enum):
+                    model_dict[k] = v.value
+                    continue
+                model_dict[k] = v
+            if k in run_keys:
+                if isinstance(v, Enum):
+                    run_dict[k] = v.value
+                    continue
+                run_dict[k] = v
+
+        return {"model": model_dict, "run": run_dict}
+
 
 @dataclass(frozen=True)
 class ConfigLSTM:
@@ -133,9 +173,10 @@ class ConfigLSTM:
     # model config
     model_type: ModelType
     repr_type: ReprType
+    num_classes: int
 
     # run config
-    num_classes: int
+    seed: int
     batch_size: int
     folds_train: list[int]
     folds_val: list[int]
@@ -151,6 +192,8 @@ class ConfigLSTM:
         data = {k: v for k, v in input.items() if k in inner_keys}
 
         return cls(**data)
+
+    def to_dict(self) -> dict: ...
 
 
 OPTIMIZER_MAP: dict[str, type[optim.Optimizer]] = {
@@ -169,3 +212,14 @@ CNN_LAYER_MAP: dict[CNNLayers, type[LayerConv] | type[LayerPool]] = {
     CNNLayers.CONV: LayerConv,
     CNNLayers.POOL: LayerPool,
 }
+
+
+@dataclass(frozen=True)
+class ArgsCLI:
+    cfg_path: Path
+    csv_path: Path
+    save_model: bool
+
+
+class CLIArgumentError(Exception):
+    exit_code = 3

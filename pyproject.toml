@@ -22,6 +22,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["infra*", "models*"]
 
+[project.scripts]
+audio-clf = "infra.cli:app"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: long-running tests"]
