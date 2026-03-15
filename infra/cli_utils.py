@@ -5,6 +5,8 @@ from typing import get_type_hints
 from infra.data_models import (
     CNN_LAYER_MAP,
     MODEL_CONFIG_MAP,
+    ArgsCLI,
+    CLIArgumentError,
     CNNLayers,
     LayerConv,
     LayerPool,
@@ -86,3 +88,31 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
             )
 
     return cfg
+
+
+def validate_paths(cfg_path: Path, csv_path: Path) -> None:
+    try:
+        if cfg_path.stat().st_size == 0:
+            msg = f"cfg_path: {cfg_path} is empty"
+            raise CLIArgumentError(msg)
+    except FileNotFoundError:
+        msg = f"cfg_path: {cfg_path} not found"
+        raise CLIArgumentError(msg)
+
+    if cfg_path.suffix != ".yaml":
+        msg = f"cfg_path: invalid suffix '{cfg_path.suffix}', expected '.yaml'"
+        raise CLIArgumentError(msg)
+
+    try:
+        csv_path.stat().st_size
+    except FileNotFoundError:
+        msg = f"csv_path: {csv_path} not found"
+        raise CLIArgumentError(msg)
+
+    if csv_path.suffix != ".csv":
+        msg = f"csv_path: invalid suffix '{csv_path.suffix}', expected '.csv'"
+        raise CLIArgumentError(msg)
+
+
+def validate_cli_args(args: ArgsCLI) -> None:
+    validate_paths(args.cfg_path, args.csv_path)
