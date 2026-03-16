@@ -184,11 +184,13 @@ class ConfigCNN:
 
 @dataclass(frozen=True)
 class ConfigLSTM:
-    """TODO: finish the config class for arguments lstm needs"""
-
     # model config
     model_type: ModelType
     repr_type: ReprType
+    input_size: int
+    hidden_size: int
+    num_layers: int
+    dropout: float
     num_classes: int
 
     # run config
@@ -200,7 +202,6 @@ class ConfigLSTM:
     optimizer: str
     lr: float
     momentum: float | None
-    ...
 
     @classmethod
     def from_dict(cls, input: dict):
@@ -209,7 +210,42 @@ class ConfigLSTM:
 
         return cls(**data)
 
-    def to_dict(self) -> dict: ...
+    def to_dict(self) -> dict:
+        model_keys = {
+            "model_type",
+            "repr_type",
+            "input_size",
+            "hidden_size",
+            "num_layers",
+            "dropout",
+            "num_classes",
+        }
+        run_keys = {
+            "seed",
+            "batch_size",
+            "folds_train",
+            "folds_val",
+            "num_epochs",
+            "optimizer",
+            "lr",
+            "momentum",
+        }
+        raw_dict = asdict(self)
+        model_dict = {}
+        run_dict = {}
+        for k, v in raw_dict.items():
+            if k in model_keys:
+                if isinstance(v, Enum):
+                    model_dict[k] = v.value
+                    continue
+                model_dict[k] = v
+            if k in run_keys:
+                if isinstance(v, Enum):
+                    run_dict[k] = v.value
+                    continue
+                run_dict[k] = v
+
+        return {"model": model_dict, "run": run_dict}
 
 
 OPTIMIZER_MAP: dict[str, type[optim.Optimizer]] = {

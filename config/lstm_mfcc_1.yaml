@@ -1,0 +1,22 @@
+model:
+  model_type: "lstm"
+  repr_type: "mfcc"
+  input_size: 120
+  hidden_size: 128
+  num_layers: 2
+  dropout: 0.3
+  num_classes: 50
+
+run:
+  seed: 42
+  folds_train:
+    - 1
+    - 2
+    - 3
+  folds_val:
+    - 4
+  batch_size: 32
+  num_epochs: 2
+  optimizer: "SGD"
+  lr: 0.001
+  momentum: null
