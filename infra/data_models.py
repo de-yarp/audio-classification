@@ -117,7 +117,7 @@ class LayerPool:
     kernel_size: int
     stride: int
     padding: int
-    type: str = "conv"
+    type: str = "pool"
 
 
 @dataclass(frozen=True)
