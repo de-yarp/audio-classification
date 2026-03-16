@@ -48,6 +48,7 @@ LOGS_DIR_PATH = Path("logs")
 LOG_NAME = "log.jsonl"
 MODEL_CHECKPOINTS_DIR_PATH = Path("runs") / "checkpoints"
 MODEL_CONFIGS_DIR_PATH = Path("runs") / "configs"
+MODEL_ARTIFACTS_DIR_PATH = Path("runs") / "artifacts"
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -62,6 +63,9 @@ class AudioDataset(torch.utils.data.Dataset):
         self.folds = folds
         self.repr_dir = root_dir / repr_type.value
         self.meta_df = pd.read_csv(csv_file, delimiter=",")
+        self.class_names = self._get_class_names()
+        self.available_folds = self.meta_df["fold"].unique()
+        self._validate_input_folds()
 
         self.samples, self.labels = self._load_samples()
 
@@ -78,6 +82,18 @@ class AudioDataset(torch.utils.data.Dataset):
         samples = [np.load(p) for p in samples_paths]
 
         return samples, labels
+
+    def _validate_input_folds(self) -> None:
+        for fold in self.folds:
+            assert np.any(self.available_folds == fold), (
+                f"could not init AudioDataset class: input folds {self.folds} contain invalid folds, available folds={self.available_folds}"
+            )
+
+    def _get_class_names(self) -> list[str]:
+        class_names_indexed = self.meta_df[["target", "category"]].sort_values(
+            by=["target"]
+        )
+        return class_names_indexed["category"].unique().tolist()
 
     def __len__(self):
         return len(self.samples)
@@ -218,7 +234,9 @@ CNN_LAYER_MAP: dict[CNNLayers, type[LayerConv] | type[LayerPool]] = {
 class ArgsCLI:
     cfg_path: Path
     csv_path: Path
-    save_model: bool
+    save_model: bool = False
+    model_path: Path | None = None
+    eval_folds: list[int] | None = None
 
 
 class CLIArgumentError(Exception):

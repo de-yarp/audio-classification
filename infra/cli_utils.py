@@ -38,6 +38,25 @@ def _validate_cnn_layers(val: dict, key: str, path: Path):
     return new_layers
 
 
+def _validate_cfg_folds(cfg: dict, path: Path) -> None:
+    val_folds = cfg["folds_val"]
+    train_folds = cfg["folds_train"]
+
+    val_folds_set = set(val_folds)
+    train_folds_set = set(train_folds)
+
+    assert len(val_folds) == len(val_folds_set), (
+        f"model.folds_val '{val_folds}' contains duplicates in config {path}"
+    )
+    assert len(train_folds) == len(train_folds_set), (
+        f"model.folds_train '{train_folds}' contains duplicates in config {path}"
+    )
+    intersection = val_folds_set & train_folds_set
+    assert not intersection, (
+        f"model.folds_val and model.folds_train contain common values {intersection} in config {path}"
+    )
+
+
 def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     model_type_str = cfg["model_type"].strip().lower()
     repr_type_str = cfg["repr_type"].strip().lower()
@@ -75,7 +94,9 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
 
         elif k_type == list[int]:
             for i in val:
-                assert isinstance(i, int)
+                assert isinstance(i, int), (
+                    f"invalid key type {path.stem}.[model/run].{key}: '{type(i)}', expected 'int'"
+                )
 
         elif k_type == float | None:
             assert isinstance(val, float) or val is None, (
@@ -87,10 +108,14 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
                 f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
             )
 
+    _validate_cfg_folds(cfg, path)
+
     return cfg
 
 
-def validate_paths(cfg_path: Path, csv_path: Path) -> None:
+def validate_args_paths(
+    cfg_path: Path, csv_path: Path, model_path: Path | None = None
+) -> None:
     try:
         if cfg_path.stat().st_size == 0:
             msg = f"cfg_path: {cfg_path} is empty"
@@ -113,6 +138,36 @@ def validate_paths(cfg_path: Path, csv_path: Path) -> None:
         msg = f"csv_path: invalid suffix '{csv_path.suffix}', expected '.csv'"
         raise CLIArgumentError(msg)
 
+    if model_path is None:
+        return
 
-def validate_cli_args(args: ArgsCLI) -> None:
-    validate_paths(args.cfg_path, args.csv_path)
+    try:
+        if model_path.stat().st_size == 0:
+            msg = f"model_path: {str(model_path)} is empty"
+            raise CLIArgumentError(msg)
+    except FileNotFoundError:
+        msg = f"model_path: {str(model_path)} not found"
+        raise CLIArgumentError(msg)
+
+    if model_path.suffix != ".pt":
+        msg = f"model_path: invalid suffix '{model_path.suffix}', expected '.pt'"
+        raise CLIArgumentError(msg)
+
+    if model_path.stem != cfg_path.stem:
+        msg = f"model_path/cfg_path: stem mismatch ['{str(model_path.stem)}' vs '{str(cfg_path.stem)}']; checkpoint and config must be of the same run"
+        raise CLIArgumentError(msg)
+
+
+def validate_eval_folds(args: ArgsCLI, cfg: dict) -> None:
+    input_folds = args.eval_folds
+    input_folds_set = set(input_folds)
+    if len(input_folds) != len(input_folds_set):
+        msg = "eval_folds: contains duplicate values"
+        raise CLIArgumentError(msg)
+
+    cfg_folds = set(cfg["folds_val"] + cfg["folds_train"])
+    intersection = cfg_folds & input_folds_set
+
+    if intersection:
+        msg = f"eval_folds: contains common values with config set folds, intersection={intersection}"
+        raise CLIArgumentError(msg)

@@ -7,9 +7,13 @@ import numpy as np
 import torch
 import yaml
 
+from infra.artifacts import save_classification_report, save_confusion_matrix
+
 from .data_models import (
+    MODEL_ARTIFACTS_DIR_PATH,
     MODEL_CHECKPOINTS_DIR_PATH,
     MODEL_CONFIGS_DIR_PATH,
+    ArgsCLI,
     ConfigCNN,
     ConfigLSTM,
     ModelType,
@@ -104,7 +108,24 @@ def save_model_checkpoint(
     return save_path
 
 
-def write_data_to_csv(
+def write_row_csv(content: dict, fieldnames: list[str], csv_path: Path) -> None:
+    with csv_path.open("a+", encoding="utf-8") as f:
+        f.seek(0)
+        csv_reader = csv.DictReader(f)
+        if csv_reader.fieldnames != fieldnames:
+            msg = f"header mismatch in {str(csv_path)}, expected {fieldnames} got {csv_reader.fieldnames}"
+            raise ValueError(msg)
+
+        f.seek(0, 2)
+        csv_writer = csv.DictWriter(
+            f, fieldnames=fieldnames, escapechar="\\", quoting=csv.QUOTE_MINIMAL
+        )
+        if csv_path.stat().st_size == 0:
+            csv_writer.writeheader()
+        csv_writer.writerow(content)
+
+
+def write_train_data_to_csv(
     content: dict, csv_path: Path, *, emit: Callable[[str, str, str, dict], None]
 ) -> None:
     fieldnames = [
@@ -117,23 +138,17 @@ def write_data_to_csv(
         "model_path",
     ]
 
-    with csv_path.open("a+", encoding="utf-8") as f:
-        csv_writer = csv.DictWriter(
-            f, fieldnames=fieldnames, escapechar="\\", quoting=csv.QUOTE_MINIMAL
-        )
-        if csv_path.stat().st_size == 0:
-            csv_writer.writeheader()
-        csv_writer.writerow(content)
+    write_row_csv(content, fieldnames, csv_path)
 
     emit(
         level="INFO",
         component=COMPONENT,
-        event="write_run_info_to_csv",
+        event="write_train_run_info_to_csv",
         payload={"csv_path": str(csv_path)},
     )
 
 
-def save_run_info(
+def save_train_run_info(
     save_model: bool,
     net: torch.nn.Module,
     cfg_instance: ConfigCNN | ConfigLSTM,
@@ -166,4 +181,62 @@ def save_run_info(
     content_updated["cfg_path"] = cfg_path
     content_updated["model_path"] = model_path
 
-    write_data_to_csv(content_updated, csv_path, emit=emit)
+    write_train_data_to_csv(content_updated, csv_path, emit=emit)
+
+
+def write_eval_data_to_csv(
+    content: dict, csv_path: Path, *, emit: Callable[[str, str, str, dict], None]
+) -> None:
+    fieldnames = [
+        "ts",
+        "run_id",
+        "avg_loss",
+        "accuracy_pct",
+        "cfg_path",
+        "model_path",
+        "eval_folds",
+        "report_path_npy",
+        "confusion_matrix_path_npy",
+        "confusion_matrix_path_png",
+    ]
+
+    write_row_csv(content, fieldnames, csv_path)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="write_eval_run_info_to_csv",
+        payload={"csv_path": str(csv_path)},
+    )
+
+
+def save_eval_artifacts(
+    preds: np.ndarray,
+    labels: np.ndarray,
+    content: dict,
+    run_id: str,
+    class_names: list[str] | None = None,
+    *,
+    artifacts_dir: Path = MODEL_ARTIFACTS_DIR_PATH / "eval",
+    emit: Callable[[str, str, str, dict], None],
+    args: ArgsCLI,
+) -> None:
+    output_dir = artifacts_dir / f"{run_id}"
+    output_dir.mkdir(exist_ok=True, parents=True)
+    content_updated = content.copy()
+    confusion_matrix_path_npy, confusion_matrix_path_png = save_confusion_matrix(
+        preds, labels, run_id, output_dir, class_names, emit=emit
+    )
+    report_path_npy = save_classification_report(
+        preds, labels, run_id, output_dir, class_names, emit=emit
+    )
+
+    eval_folds_str = [str(f) for f in args.eval_folds]
+    content_updated["cfg_path"] = args.cfg_path
+    content_updated["model_path"] = args.model_path
+    content_updated["eval_folds"] = ";".join(eval_folds_str)
+    content_updated["report_path_npy"] = report_path_npy
+    content_updated["confusion_matrix_path_npy"] = confusion_matrix_path_npy
+    content_updated["confusion_matrix_path_png"] = confusion_matrix_path_png
+
+    write_eval_data_to_csv(content_updated, args.csv_path, emit=emit)
