@@ -46,11 +46,19 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
     np.random.seed(seed)
 
     if pipe_type == "train":
-        net, cfg, content = training_loop(
+        net, cfg, content, train_info_for_plots = training_loop(
             cfg_dict_norm, emit=emit, run_id=run_id, args=args
         )
         save_train_run_info(
-            args.save_model, net, cfg, args.cfg_path, content, args.csv_path, emit=emit
+            args.save_model,
+            net,
+            cfg,
+            args.cfg_path,
+            args.csv_path,
+            content,
+            run_id,
+            train_info_for_plots=train_info_for_plots,
+            emit=emit,
         )
     elif pipe_type == "eval":
         validate_eval_folds(args, cfg_dict_norm)

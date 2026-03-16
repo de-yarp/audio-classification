@@ -107,7 +107,7 @@ def training_loop(
     emit: Callable[[str, str, str, dict], None],
     run_id: str,
     args: ArgsCLI,
-) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict]:
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict, dict]:
 
     emit(
         level="INFO",
@@ -128,6 +128,10 @@ def training_loop(
     avg_loss_last_train_epoch = 0.0
     avg_loss_val = 0.0
     accuracy_val_pct = 0.0
+
+    train_losses = []
+    val_losses = []
+    val_accuracies = []
     for epoch in range(cfg.num_epochs):
         running_loss = 0.0
 
@@ -161,6 +165,10 @@ def training_loop(
             net, val_loader, criterion, emit
         )
 
+        train_losses.append(avg_loss_last_train_epoch)
+        val_losses.append(avg_loss_val)
+        val_accuracies.append(accuracy_val_pct)
+
     emit(
         level="INFO",
         component=COMPONENT,
@@ -180,4 +188,13 @@ def training_loop(
         "accuracy_val_pct": round(accuracy_val_pct, 4),
     }
 
-    return net, cfg, content
+    return (
+        net,
+        cfg,
+        content,
+        {
+            "train_losses": train_losses,
+            "val_losses": val_losses,
+            "val_accuracies": val_accuracies,
+        },
+    )
