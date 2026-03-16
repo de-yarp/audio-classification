@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Callable
 
@@ -16,7 +15,7 @@ from infra.data_models import (
     ModelType,
     ReprType,
 )
-from infra.log_utils import make_emit, now_ts_iso
+from infra.log_utils import now_ts_iso
 
 from .cnn_mel import MEL_CNN
 from .cnn_mfcc import MFCC_CNN
@@ -40,7 +39,9 @@ def _setup_optimizer(
     return opt_class(params=net.parameters(), lr=cfg.lr)
 
 
-def _setup_model(cfg_dict: dict) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
+def _setup_model(
+    cfg_dict: dict, model_path: Path | None = None
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
     model_type = cfg_dict["model_type"]
     repr_type = cfg_dict["repr_type"]
 
@@ -57,6 +58,9 @@ def _setup_model(cfg_dict: dict) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
             net = MFCC_LSTM(cfg=cfg)
         elif repr_type == ReprType.MEL:
             net = MEL_LSTM(cfg=cfg)
+
+    if model_path is not None:
+        net.load_state_dict(torch.load(model_path))
 
     return net, cfg
 
@@ -98,9 +102,12 @@ def run_validation(
 
 
 def training_loop(
-    cfg_dict: dict, *, logger: logging.Logger, run_id: str, args: ArgsCLI
-) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict]:
-    emit = make_emit(logger, run_id)
+    cfg_dict: dict,
+    *,
+    emit: Callable[[str, str, str, dict], None],
+    run_id: str,
+    args: ArgsCLI,
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict, dict]:
 
     emit(
         level="INFO",
@@ -121,6 +128,10 @@ def training_loop(
     avg_loss_last_train_epoch = 0.0
     avg_loss_val = 0.0
     accuracy_val_pct = 0.0
+
+    train_losses = []
+    val_losses = []
+    val_accuracies = []
     for epoch in range(cfg.num_epochs):
         running_loss = 0.0
 
@@ -154,6 +165,10 @@ def training_loop(
             net, val_loader, criterion, emit
         )
 
+        train_losses.append(avg_loss_last_train_epoch)
+        val_losses.append(avg_loss_val)
+        val_accuracies.append(accuracy_val_pct)
+
     emit(
         level="INFO",
         component=COMPONENT,
@@ -173,4 +188,13 @@ def training_loop(
         "accuracy_val_pct": round(accuracy_val_pct, 4),
     }
 
-    return net, cfg, content
+    return (
+        net,
+        cfg,
+        content,
+        {
+            "train_losses": train_losses,
+            "val_losses": val_losses,
+            "val_accuracies": val_accuracies,
+        },
+    )

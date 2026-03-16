@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from .cli_utils import validate_cli_args
+from .cli_utils import validate_args_paths
 from .data_models import ArgsCLI, CLIArgumentError
 from .log_utils import make_emit, setup_logger
 from .pipeline import pipe_run
@@ -18,7 +18,47 @@ logger = setup_logger()
 
 
 @app.command()
-def main(
+def eval(
+    cfg_path: Annotated[Path, typer.Argument(..., help="path to your model config")],
+    csv_path: Annotated[
+        Path, typer.Argument(..., help="path to your experiments tracker .csv")
+    ],
+    model_path: Annotated[
+        Path, typer.Argument(..., help="path to your model checkpoint")
+    ],
+    eval_folds: Annotated[list[int], typer.Option(..., help="number of eval folds")],
+):
+    run_id = str(uuid.uuid4())
+    emit = make_emit(logger, run_id)
+    try:
+        args = ArgsCLI(
+            cfg_path=cfg_path,
+            csv_path=csv_path,
+            model_path=model_path,
+            eval_folds=eval_folds,
+        )
+        validate_args_paths(args.cfg_path, args.csv_path, args.model_path)
+        pipe_run(args, logger=logger, run_id=run_id)
+    except CLIArgumentError as e:
+        emit(
+            level="ERROR",
+            component=COMPONENT,
+            event="invalid_cli_argument",
+            payload={"error_msg": str(e)},
+        )
+        raise
+    except Exception as e:
+        emit(
+            level="ERROR",
+            component=COMPONENT,
+            event="unexpected_error",
+            payload={"error_msg": str(e), "traceback": traceback.format_exc()},
+        )
+        raise
+
+
+@app.command()
+def train(
     cfg_path: Annotated[Path, typer.Argument(..., help="path to your model config")],
     csv_path: Annotated[
         Path, typer.Argument(..., help="path to your experiments tracker .csv")
@@ -33,8 +73,8 @@ def main(
     run_id = str(uuid.uuid4())
     emit = make_emit(logger, run_id)
     try:
-        args = ArgsCLI(cfg_path, csv_path, save_model)
-        validate_cli_args(args)
+        args = ArgsCLI(cfg_path=cfg_path, csv_path=csv_path, save_model=save_model)
+        validate_args_paths(args.cfg_path, args.csv_path, args.model_path)
         pipe_run(args, logger=logger, run_id=run_id)
     except CLIArgumentError as e:
         emit(
