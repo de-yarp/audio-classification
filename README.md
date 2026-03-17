@@ -129,6 +129,7 @@ Experiment configs live in `config/` and have two sections:
 model:
   model_type: "cnn"           # cnn | lstm
   repr_type: "mfcc"           # mfcc | mel
+  mfcc_deltas: true           # true → 120 channels (MFCC + delta + delta2), false → 40 channels
   conv_layers:                # list of conv/pool layers (CNN only)
     - type: "conv"
       kernel_count: 16
@@ -157,6 +158,8 @@ run:
 The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer.
 
 **Note:** The config format above is currently implemented for CNN only. LSTM config and model are not yet built. The `run:` section will be shared between both architectures; the `model:` section will differ (LSTM will have its own layer parameters instead of `conv_layers` and `fc_layers`).
+
+**Note:** `mfcc_deltas` is only relevant for MFCC experiments (ignored for mel). It must be manually aligned with how features were preprocessed — if `features.yaml` had `include_deltas: true`, set `mfcc_deltas: true` in the experiment config. There is no automatic link between feature extraction and training.
 
 ## Tracker CSVs
 

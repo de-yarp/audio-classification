@@ -1,6 +1,7 @@
 model:
   model_type: "cnn"
   repr_type: "mfcc"
+  mfcc_deltas: True
   conv_layers:
     - type: "conv"
       kernel_count: 16

@@ -16,7 +16,7 @@ class MFCC_CNN(nn.Module):
         self.conv_layers_list = nn.ModuleList()
         self.fc_layers_list = nn.ModuleList()
         out_channels = 1
-        height = 120
+        height = 120 if cfg.mfcc_deltas else 40
         width = 216
         for layer in cfg.conv_layers:
             kernel_count = -1
