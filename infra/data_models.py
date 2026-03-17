@@ -139,6 +139,9 @@ class ConfigCNN:
     lr: float
     momentum: float | None
 
+    # in_channels switch for mfcc
+    mfcc_deltas: bool = True
+
     @classmethod
     def from_dict(cls, input: dict):
         inner_keys = {f.name for f in fields(cls)}
@@ -153,6 +156,7 @@ class ConfigCNN:
             "conv_layers",
             "fc_layers",
             "num_classes",
+            "mfcc_deltas",
         }
         run_keys = {
             "seed",
