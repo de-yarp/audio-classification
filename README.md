@@ -4,6 +4,8 @@ University project comparing CNN and LSTM architectures on environmental sound c
 
 ## Quick Start
 
+Requires Python 3.12.* and [uv](https://docs.astral.sh/uv/) (`pip install uv`).
+
 ```bash
 git clone git@github.com:de-yarp/audio-classification.git
 cd audio-classification
@@ -14,7 +16,7 @@ All commands go through `uv run`. See `docs/team/TEAM_SETUP.md` for full onboard
 
 ### Data Setup
 
-1. Download ESC-50 and place the audio files in `data/raw/esc50/audio/` and metadata in `data/raw/esc50/meta/`.
+1. Download the [ESC-50](https://github.com/karolpiczak/ESC-50) dataset. Copy all `.wav` files from the repository's `audio/` folder into `data/raw/esc50/audio/` and the `esc50.csv` file from `meta/` into `data/raw/esc50/meta/`.
 2. Run feature extraction:
 
 ```bash
