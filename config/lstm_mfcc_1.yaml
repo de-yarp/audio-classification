@@ -5,6 +5,8 @@ model:
   hidden_size: 128
   num_layers: 2
   dropout: 0.3
+  fc_layers:
+    - 128
   num_classes: 50
 
 run:
