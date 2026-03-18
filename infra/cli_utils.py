@@ -61,7 +61,6 @@ def _validate_cfg_folds(cfg: dict, path: Path) -> None:
 def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     model_type_str = cfg["model_type"].strip().lower()
     repr_type_str = cfg["repr_type"].strip().lower()
-    pool_type_str = cfg["pool_type"].strip().lower()
     optimizer_str = cfg["optimizer"].strip().upper()
 
     try:
@@ -74,15 +73,18 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     except ValueError as e:
         msg = f"invalid model.repr_type '{repr_type_str}' in config {path}, expected {[e.value for e in ReprType]}"
         raise ValueError(msg) from e
-    try:
-        pool_type = PoolType(pool_type_str)
-    except ValueError as e:
-        msg = f"invalid model.pool_type '{pool_type_str}' in config {path}, expected {[e.value for e in PoolType]}"
-        raise ValueError(msg) from e
+
+    if model_type == ModelType.CNN:
+        pool_type_str = cfg["pool_type"].strip().lower()
+        try:
+            pool_type = PoolType(pool_type_str)
+        except ValueError as e:
+            msg = f"invalid model.pool_type '{pool_type_str}' in config {path}, expected {[e.value for e in PoolType]}"
+            raise ValueError(msg) from e
+        cfg["pool_type"] = pool_type
 
     cfg["model_type"] = model_type
     cfg["repr_type"] = repr_type
-    cfg["pool_type"] = pool_type
     cfg["optimizer"] = optimizer_str
 
     cfg_class = MODEL_CONFIG_MAP[model_type]
