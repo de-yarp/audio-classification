@@ -15,7 +15,12 @@ class MFCC_LSTM(nn.Module):
             dropout=cfg.dropout,
             batch_first=True,
         )
-        self.classifier = nn.Linear(cfg.hidden_size, cfg.num_classes)
+        self.classifier = nn.ModuleList()
+        fc_input_size = cfg.hidden_size
+        for fc_output_size in cfg.fc_layers:
+            self.classifier.append(nn.Linear(fc_input_size, fc_output_size))
+            fc_input_size = fc_output_size
+        self.classifier.append(nn.Linear(fc_input_size, cfg.num_classes))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Expected shape is (batch_size, input_size, time_steps).
@@ -34,4 +39,8 @@ class MFCC_LSTM(nn.Module):
         _, (hidden_n, _) = self.lstm(x)
         last_hidden = hidden_n[-1]
 
-        return self.classifier(last_hidden)
+        x = last_hidden
+        for fc in self.classifier[:-1]:
+            x = torch.relu(fc(x))
+
+        return self.classifier[-1](x)

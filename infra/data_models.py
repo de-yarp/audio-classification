@@ -195,6 +195,7 @@ class ConfigLSTM:
     hidden_size: int
     num_layers: int
     dropout: float
+    fc_layers: list[int]
     num_classes: int
 
     # run config
@@ -222,6 +223,7 @@ class ConfigLSTM:
             "hidden_size",
             "num_layers",
             "dropout",
+            "fc_layers",
             "num_classes",
         }
         run_keys = {
