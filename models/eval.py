@@ -30,7 +30,7 @@ def evaluate_model(
         event="start_eval",
     )
 
-    net, cfg = _setup_model(cfg_dict, args.model_path)
+    net, cfg, device = _setup_model(cfg_dict, args.model_path)
 
     net.eval()
     criterion = nn.CrossEntropyLoss()
@@ -46,10 +46,15 @@ def evaluate_model(
     correct = 0
     with torch.no_grad():
         for inputs, labels in eval_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
             outputs = net(inputs)
             predicted = torch.argmax(outputs, 1)
+
             all_preds.append(predicted)
             all_labels.append(labels)
+
             loss = criterion(outputs, labels)
             eval_loss += loss.item()
             total += labels.size(0)

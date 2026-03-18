@@ -41,7 +41,7 @@ def _setup_optimizer(
 
 def _setup_model(
     cfg_dict: dict, model_path: Path | None = None
-) -> tuple[nn.Module, ConfigCNN | ConfigLSTM]:
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, torch.device]:
     model_type = cfg_dict["model_type"]
     repr_type = cfg_dict["repr_type"]
 
@@ -62,13 +62,25 @@ def _setup_model(
     if model_path is not None:
         net.load_state_dict(torch.load(model_path))
 
-    return net, cfg
+    device = None
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
+    net.to(device)
+
+    return net, cfg, device
 
 
 def run_validation(
     net: nn.Module,
     val_loader: DataLoader,
     criterion: nn.CrossEntropyLoss,
+    device: torch.device,
     emit: Callable[[str, str, str, dict], None],
 ) -> tuple[float, float]:
     net.eval()
@@ -78,8 +90,12 @@ def run_validation(
     total = 0
     with torch.no_grad():
         for inputs, labels in val_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
             outputs = net(inputs)
             predicted = torch.argmax(outputs, 1)
+
             loss = criterion(outputs, labels)
             val_loss += loss.item()
             total += labels.size(0)
@@ -115,7 +131,7 @@ def training_loop(
         event="start_training",
     )
 
-    net, cfg = _setup_model(cfg_dict)
+    net, cfg, device = _setup_model(cfg_dict)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = _setup_optimizer(net, cfg, args.cfg_path)
@@ -138,6 +154,9 @@ def training_loop(
         net.train()
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
+
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
 
@@ -162,7 +181,7 @@ def training_loop(
         avg_loss_last_train_epoch = running_loss / len(train_loader)
 
         avg_loss_val, accuracy_val_pct = run_validation(
-            net, val_loader, criterion, emit
+            net, val_loader, criterion, device, emit
         )
 
         train_losses.append(avg_loss_last_train_epoch)
