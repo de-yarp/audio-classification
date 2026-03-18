@@ -143,7 +143,9 @@ model:
       kernel_size: 2
       stride: 2
       padding: 0
+  pool_type: "max"             # max | avg (applies to all pool layers)
   fc_layers: [512, 128]       # FC layer sizes (final → num_classes added automatically)
+  dropout: 0.0                # dropout rate between FC layers (0.0 = disabled)
   num_classes: 50
 
 run:

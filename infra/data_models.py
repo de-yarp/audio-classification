@@ -42,6 +42,11 @@ class CNNLayers(Enum):
     POOL = "pool"
 
 
+class PoolType(Enum):
+    MAX = "max"
+    AVG = "avg"
+
+
 ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
 LOGS_DIR_PATH = Path("logs")
@@ -126,7 +131,9 @@ class ConfigCNN:
     model_type: ModelType
     repr_type: ReprType
     conv_layers: list[LayerConv | LayerPool]
+    pool_type: PoolType
     fc_layers: list[int]
+    dropout: float
     num_classes: int
 
     # run config
@@ -157,6 +164,8 @@ class ConfigCNN:
             "fc_layers",
             "num_classes",
             "mfcc_deltas",
+            "pool_type",
+            "dropout",
         }
         run_keys = {
             "seed",

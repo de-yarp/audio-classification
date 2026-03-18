@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn.modules as nn
 
-from infra.data_models import ConfigCNN, LayerConv, LayerPool
+from infra.data_models import ConfigCNN, LayerConv, LayerPool, PoolType
 
 
 class MFCC_CNN(nn.Module):
@@ -15,9 +15,19 @@ class MFCC_CNN(nn.Module):
         self.num_classes = cfg.num_classes
         self.conv_layers_list = nn.ModuleList()
         self.fc_layers_list = nn.ModuleList()
+        self.dropout = cfg.dropout
         out_channels = 1
         height = 120 if cfg.mfcc_deltas else 40
         width = 216
+        pool2d = None
+        if cfg.pool_type == PoolType.MAX:
+            pool2d = nn.MaxPool2d
+        elif cfg.pool_type == PoolType.AVG:
+            pool2d = nn.AvgPool2d
+        else:
+            msg = f"invalid model.pool_type {cfg.pool_type}, expected {[e.value for e in PoolType]}"
+            raise ValueError(msg)
+
         for layer in cfg.conv_layers:
             kernel_count = -1
             if isinstance(layer, LayerConv):
@@ -36,7 +46,7 @@ class MFCC_CNN(nn.Module):
                 kernel_count = layer.kernel_count
             if isinstance(layer, LayerPool):
                 self.conv_layers_list.append(
-                    nn.MaxPool2d(
+                    pool2d(
                         layer.kernel_size,
                         layer.stride,
                         layer.padding,
@@ -58,8 +68,12 @@ class MFCC_CNN(nn.Module):
 
         last_fc_out_channels = fc_layers[0]
         self.fc_layers_list.append(nn.Linear(flat_tensor_shape, last_fc_out_channels))
+        if self.dropout != 0.0:
+            self.fc_layers_list.append(nn.Dropout(self.dropout))
         for fc_out_channels in fc_layers[1:]:
             self.fc_layers_list.append(nn.Linear(last_fc_out_channels, fc_out_channels))
+            if self.dropout != 0.0:
+                self.fc_layers_list.append(nn.Dropout(self.dropout))
             last_fc_out_channels = fc_out_channels
         self.fc_layers_list.append(nn.Linear(last_fc_out_channels, self.num_classes))
 
@@ -96,6 +110,9 @@ class MFCC_CNN(nn.Module):
         x = torch.flatten(x, 1)
 
         for fc in self.fc_layers_list[:-1]:
+            if isinstance(fc, nn.Dropout):
+                x = fc(x)
+                continue
             x = self.activation_fn(fc(x))
 
         x = self.fc_layers_list[-1](x)
