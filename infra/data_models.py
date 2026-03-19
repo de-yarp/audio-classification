@@ -145,6 +145,7 @@ class ConfigCNN:
     optimizer: str
     lr: float
     momentum: float | None
+    weight_decay: float
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
@@ -176,6 +177,7 @@ class ConfigCNN:
             "optimizer",
             "lr",
             "momentum",
+            "weight_decay",
         }
         raw_dict = asdict(self)
         model_dict = {}
@@ -216,6 +218,7 @@ class ConfigLSTM:
     optimizer: str
     lr: float
     momentum: float | None
+    weight_decay: float
 
     @classmethod
     def from_dict(cls, input: dict):
@@ -244,6 +247,7 @@ class ConfigLSTM:
             "optimizer",
             "lr",
             "momentum",
+            "weight_decay",
         }
         raw_dict = asdict(self)
         model_dict = {}

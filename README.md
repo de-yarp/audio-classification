@@ -157,6 +157,7 @@ run:
   optimizer: "SGD"            # SGD | ADAM | ADAMW
   lr: 0.001
   momentum: null              # only used with SGD
+  weight_decay: 0.0           # L2 regularization (e.g. 1e-4), applies to all optimizers
 ```
 
 The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer.
