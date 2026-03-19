@@ -202,7 +202,6 @@ class ConfigLSTM:
     # model config
     model_type: ModelType
     repr_type: ReprType
-    input_size: int
     hidden_size: int
     num_layers: int
     dropout: float
@@ -220,6 +219,9 @@ class ConfigLSTM:
     momentum: float | None
     weight_decay: float
 
+    # in_channels switch for mfcc
+    mfcc_deltas: bool = True
+
     @classmethod
     def from_dict(cls, input: dict):
         inner_keys = {f.name for f in fields(cls)}
@@ -231,7 +233,7 @@ class ConfigLSTM:
         model_keys = {
             "model_type",
             "repr_type",
-            "input_size",
+            "mfcc_deltas",
             "hidden_size",
             "num_layers",
             "dropout",

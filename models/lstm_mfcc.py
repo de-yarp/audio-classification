@@ -7,9 +7,9 @@ from infra.data_models import ConfigLSTM
 class MFCC_LSTM(nn.Module):
     def __init__(self, *, cfg: ConfigLSTM):
         super().__init__()
-        self.input_size = cfg.input_size
+        self.input_size = 120 if cfg.mfcc_deltas else 40
         self.lstm = nn.LSTM(
-            input_size=cfg.input_size,
+            input_size=self.input_size,
             hidden_size=cfg.hidden_size,
             num_layers=cfg.num_layers,
             dropout=cfg.dropout,
