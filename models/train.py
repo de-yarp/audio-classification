@@ -34,9 +34,14 @@ def _setup_optimizer(
         raise ValueError(msg)
 
     if opt_class is optim.SGD and cfg.momentum is not None:
-        return opt_class(params=net.parameters(), lr=cfg.lr, momentum=cfg.momentum)
+        return opt_class(
+            params=net.parameters(),
+            lr=cfg.lr,
+            momentum=cfg.momentum,
+            weight_decay=cfg.weight_decay,
+        )
 
-    return opt_class(params=net.parameters(), lr=cfg.lr)
+    return opt_class(params=net.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
 
 def _setup_model(

@@ -4,7 +4,7 @@ model:
   mfcc_deltas: True
   conv_layers:
     - type: "conv"
-      kernel_count: 16
+      kernel_count: 32
       kernel_size: 3
       stride: 1
       padding: 0
@@ -14,7 +14,17 @@ model:
       stride: 2
       padding: 0
     - type: "conv"
-      kernel_count: 32
+      kernel_count: 64
+      kernel_size: 3
+      stride: 1
+      padding: 0
+      batch_norm: True
+    - type: "pool"
+      kernel_size: 2
+      stride: 2
+      padding: 0
+    - type: "conv"
+      kernel_count: 96
       kernel_size: 3
       stride: 1
       padding: 0
@@ -27,7 +37,7 @@ model:
   fc_layers:
     - 512
     - 128
-  dropout: 0.0
+  dropout: 0.5
   num_classes: 50
 
 run:
@@ -39,7 +49,8 @@ run:
   folds_val:
     - 4
   batch_size: 32
-  num_epochs: 2
+  num_epochs: 50
   optimizer: "SGD"
   lr: 0.001
-  momentum: null
+  momentum: 0.9
+  weight_decay: 0.001
