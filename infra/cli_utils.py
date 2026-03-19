@@ -1,6 +1,10 @@
+import random
 from dataclasses import fields
 from pathlib import Path
 from typing import get_type_hints
+
+import numpy as np
+import torch
 
 from infra.data_models import (
     CNN_LAYER_MAP,
@@ -14,6 +18,12 @@ from infra.data_models import (
     PoolType,
     ReprType,
 )
+
+
+def set_seed(seed: int) -> None:
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 def _validate_cnn_layers(val: dict, key: str, path: Path):
@@ -124,7 +134,10 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
 
 
 def validate_args_paths(
-    cfg_path: Path, csv_path: Path, model_path: Path | None = None
+    cfg_path: Path,
+    csv_path: Path,
+    model_path: Path | None = None,
+    cross_val_csv_path: Path | None = None,
 ) -> None:
     try:
         if cfg_path.stat().st_size == 0:
@@ -147,6 +160,17 @@ def validate_args_paths(
     if csv_path.suffix != ".csv":
         msg = f"csv_path: invalid suffix '{csv_path.suffix}', expected '.csv'"
         raise CLIArgumentError(msg)
+
+    if cross_val_csv_path is not None:
+        try:
+            cross_val_csv_path.stat().st_size
+        except FileNotFoundError:
+            msg = f"cross_val_csv_path: {cross_val_csv_path} not found"
+            raise CLIArgumentError(msg)
+
+        if cross_val_csv_path.suffix != ".csv":
+            msg = f"cross_val_csv_path: invalid suffix '{cross_val_csv_path.suffix}', expected '.csv'"
+            raise CLIArgumentError(msg)
 
     if model_path is None:
         return

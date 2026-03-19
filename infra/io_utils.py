@@ -11,6 +11,8 @@ from infra.artifacts import (
     save_accuracy_curve,
     save_classification_report,
     save_confusion_matrix,
+    save_cv_accuracy_curve,
+    save_cv_loss_curve,
     save_loss_curve,
 )
 
@@ -67,13 +69,23 @@ def save_yaml_config(
     model_type: ModelType,
     repr_type: ReprType,
     ts_filename_ext: str,
+    run_id: str,
     *,
-    path: Path = MODEL_CONFIGS_DIR_PATH,
+    output_dir: Path = MODEL_CONFIGS_DIR_PATH,
     emit: Callable[[str, str, str, dict], None],
+    cv_run_id: str | None = None,
 ) -> Path:
     cfg = cfg_instance.to_dict()
-    if not path.exists() or not path.is_dir():
-        raise FileNotFoundError
+    if not output_dir.exists() or not output_dir.is_dir():
+        msg = f"model_config_dir {output_dir} does not exist or is not a dir"
+        raise FileNotFoundError(msg)
+
+    if cv_run_id is not None:
+        path = output_dir / "cv" / cv_run_id / run_id
+    else:
+        path = output_dir / "quick" / run_id
+    path.mkdir(parents=True, exist_ok=True)
+
     save_path = path / f"{model_type.value}_{repr_type.value}_{ts_filename_ext}.yaml"
     with save_path.open("w", encoding="utf-8") as f:
         yaml.dump(cfg, f)
@@ -93,10 +105,22 @@ def save_model_checkpoint(
     model_type: ModelType,
     repr_type: ReprType,
     ts_filename_ext: str,
+    run_id: str,
     *,
-    path: Path = MODEL_CHECKPOINTS_DIR_PATH,
+    cv_run_id: str | None = None,
+    output_dir: Path = MODEL_CHECKPOINTS_DIR_PATH,
     emit: Callable[[str, str, str, dict], None],
 ) -> Path:
+    if not output_dir.exists() or not output_dir.is_dir():
+        msg = f"model_checkpoint_dir {output_dir} does not exist or is not a dir"
+        raise FileNotFoundError(msg)
+
+    if cv_run_id is not None:
+        path = output_dir / "cv" / cv_run_id / run_id
+    else:
+        path = output_dir / "quick" / run_id
+    path.mkdir(parents=True, exist_ok=True)
+
     save_path = path / f"{model_type.value}_{repr_type.value}_{ts_filename_ext}.pt"
     torch.save(
         net.state_dict(),
@@ -144,6 +168,7 @@ def write_train_data_to_csv(
         "model_path",
         "loss_curve_path_png",
         "accuracy_curve_path_png",
+        "parent_cv_run_id",
     ]
 
     write_row_csv(content, fieldnames, csv_path)
@@ -157,19 +182,21 @@ def write_train_data_to_csv(
 
 
 def save_train_run_info(
-    save_model: bool,
     net: torch.nn.Module,
     cfg_instance: ConfigCNN | ConfigLSTM,
-    cfg_path: Path,
-    csv_path: Path,
     content: dict,
     run_id: str,
     *,
+    args: ArgsCLI,
     train_info_for_plots: dict,
     emit: Callable[[str, str, str, dict], None],
     artifacts_dir: Path = MODEL_ARTIFACTS_DIR_PATH / "train",
+    cv_run_id: str | None = None,
 ) -> None:
-    output_dir = artifacts_dir / f"{run_id}"
+    if args.cross_val_csv_path is not None and cv_run_id is not None:
+        output_dir = artifacts_dir / "cv" / cv_run_id / run_id
+    else:
+        output_dir = artifacts_dir / "quick" / run_id
     output_dir.mkdir(exist_ok=True, parents=True)
 
     content_updated = content.copy()
@@ -180,16 +207,20 @@ def save_train_run_info(
         cfg_instance.model_type,
         cfg_instance.repr_type,
         ts_filename_ext,
+        run_id,
         emit=emit,
+        cv_run_id=cv_run_id,
     )
 
-    if save_model:
+    if args.save_model:
         model_path = save_model_checkpoint(
             net,
             cfg_instance.model_type,
             cfg_instance.repr_type,
             ts_filename_ext,
+            run_id,
             emit=emit,
+            cv_run_id=cv_run_id,
         )
 
     content_updated["cfg_path"] = cfg_path
@@ -208,8 +239,9 @@ def save_train_run_info(
 
     content_updated["loss_curve_path_png"] = loss_curve_path_png
     content_updated["accuracy_curve_path_png"] = accuracy_curve_path_png
+    content_updated["parent_cv_run_id"] = cv_run_id
 
-    write_train_data_to_csv(content_updated, csv_path, emit=emit)
+    write_train_data_to_csv(content_updated, args.csv_path, emit=emit)
 
 
 def write_eval_data_to_csv(
@@ -268,3 +300,86 @@ def save_eval_artifacts(
     content_updated["confusion_matrix_path_png"] = confusion_matrix_path_png
 
     write_eval_data_to_csv(content_updated, args.csv_path, emit=emit)
+
+
+def write_cv_data_to_csv(
+    content: dict, csv_path: Path, *, emit: Callable[[str, str, str, dict], None]
+) -> None:
+    fieldnames = [
+        "ts",
+        "cv_run_id",
+        "child_run_ids",
+        "mean_loss",
+        "std_loss",
+        "mean_accuracy",
+        "std_accuracy",
+        "cfg_path",
+        "loss_curve_path_png",
+        "accuracy_curve_path_png",
+    ]
+
+    write_row_csv(content, fieldnames, csv_path)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="write_cv_run_info_to_csv",
+        payload={"csv_path": str(csv_path)},
+    )
+
+
+def save_cross_val_artifacts(
+    content: dict,
+    cv_run_id: str,
+    *,
+    args: ArgsCLI,
+    cv_train_info: list[dict],
+    emit: Callable[[str, str, str, dict], None],
+    artifacts_dir: Path = MODEL_ARTIFACTS_DIR_PATH / "train",
+) -> None:
+    output_dir = artifacts_dir / "cv" / cv_run_id
+    output_dir.mkdir(exist_ok=True, parents=True)
+    content_updated = content.copy()
+
+    train_loss_arrays = np.array([d["train_losses"] for d in cv_train_info])
+    val_loss_arrays = np.array([d["val_losses"] for d in cv_train_info])
+    acc_arrays = np.array([d["val_accuracies"] for d in cv_train_info])
+
+    train_loss_mean = train_loss_arrays.mean(axis=0)
+    train_loss_std = train_loss_arrays.std(axis=0)
+    val_loss_mean = val_loss_arrays.mean(axis=0)
+    val_loss_std = val_loss_arrays.std(axis=0)
+    acc_mean = acc_arrays.mean(axis=0)
+    acc_std = acc_arrays.std(axis=0)
+
+    epochs = range(1, len(train_loss_mean) + 1)
+
+    # final summary stats for CV tracker CSV
+    cv_mean_accuracy = float(acc_arrays[:, -1].mean())
+    cv_std_accuracy = float(acc_arrays[:, -1].std())
+    cv_mean_loss = float(val_loss_arrays[:, -1].mean())
+    cv_std_loss = float(val_loss_arrays[:, -1].std())
+
+    loss_curve_path_png = save_cv_loss_curve(
+        epochs,
+        train_loss_mean,
+        train_loss_std,
+        val_loss_mean,
+        val_loss_std,
+        cv_run_id,
+        output_dir,
+        emit=emit,
+    )
+    accuracy_curve_path_png = save_cv_accuracy_curve(
+        epochs, acc_mean, acc_std, cv_run_id, output_dir, emit=emit
+    )
+
+    content_updated["mean_accuracy"] = round(cv_mean_accuracy, 4)
+    content_updated["std_accuracy"] = round(cv_std_accuracy, 4)
+    content_updated["mean_loss"] = round(cv_mean_loss, 4)
+    content_updated["std_loss"] = round(cv_std_loss, 4)
+    content_updated["loss_curve_path_png"] = loss_curve_path_png
+    content_updated["accuracy_curve_path_png"] = accuracy_curve_path_png
+    content_updated["cfg_path"] = args.cfg_path
+
+    write_cv_data_to_csv(content_updated, args.cross_val_csv_path, emit=emit)
