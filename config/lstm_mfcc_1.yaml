@@ -1,7 +1,7 @@
 model:
   model_type: "lstm"
   repr_type: "mfcc"
-  input_size: 120
+  mfcc_deltas: True
   hidden_size: 128
   num_layers: 2
   dropout: 0.3
