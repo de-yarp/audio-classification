@@ -290,6 +290,7 @@ class ArgsCLI:
     cfg_path: Path
     csv_path: Path
     save_model: bool = False
+    cross_val_csv_path: Path | None = None
     model_path: Path | None = None
     eval_folds: list[int] | None = None
 

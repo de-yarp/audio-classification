@@ -149,3 +149,76 @@ def save_accuracy_curve(
     )
 
     return path
+
+
+# --- add to artifacts.py ---
+
+
+def save_cv_loss_curve(
+    epochs: range,
+    train_mean: np.ndarray,
+    train_std: np.ndarray,
+    val_mean: np.ndarray,
+    val_std: np.ndarray,
+    cv_run_id: str,
+    output_dir: Path,
+    *,
+    emit: Callable[[str, str, str, dict], None],
+) -> Path:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(epochs, train_mean, label="Train Loss (mean)")
+    ax.fill_between(epochs, train_mean - train_std, train_mean + train_std, alpha=0.2)
+    ax.plot(epochs, val_mean, label="Val Loss (mean)")
+    ax.fill_between(epochs, val_mean - val_std, val_mean + val_std, alpha=0.2)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.set_title(f"CV Loss Curve — {cv_run_id}")
+    ax.legend()
+    plt.tight_layout()
+
+    path = output_dir / "cv_loss_curve.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="save_artifact_cv_loss_curve_png",
+        payload={"artifact_path": str(path)},
+    )
+
+    return path
+
+
+def save_cv_accuracy_curve(
+    epochs: range,
+    acc_mean: np.ndarray,
+    acc_std: np.ndarray,
+    cv_run_id: str,
+    output_dir: Path,
+    *,
+    emit: Callable[[str, str, str, dict], None],
+) -> Path:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(epochs, acc_mean, label="Val Accuracy (mean)", color="green")
+    ax.fill_between(
+        epochs, acc_mean - acc_std, acc_mean + acc_std, alpha=0.2, color="green"
+    )
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_title(f"CV Validation Accuracy — {cv_run_id}")
+    ax.legend()
+    plt.tight_layout()
+
+    path = output_dir / "cv_accuracy_curve.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="save_artifact_cv_accuracy_curve_png",
+        payload={"artifact_path": str(path)},
+    )
+
+    return path

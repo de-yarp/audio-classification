@@ -127,6 +127,7 @@ def training_loop(
     *,
     emit: Callable[[str, str, str, dict], None],
     run_id: str,
+    cv_run_id: str | None = None,
     args: ArgsCLI,
 ) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict, dict]:
 
@@ -134,6 +135,7 @@ def training_loop(
         level="INFO",
         component=COMPONENT,
         event="start_training",
+        payload={"parent_cv_run_id": cv_run_id},
     )
 
     net, cfg, device = _setup_model(cfg_dict)
@@ -201,6 +203,7 @@ def training_loop(
             "avg_loss_last_train_epoch": round(avg_loss_last_train_epoch, 4),
             "avg_loss_val": round(avg_loss_val, 4),
             "accuracy_val_pct": round(accuracy_val_pct, 4),
+            "parent_cv_run_id": cv_run_id,
         },
     )
 

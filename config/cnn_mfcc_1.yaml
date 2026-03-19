@@ -49,8 +49,8 @@ run:
   folds_val:
     - 4
   batch_size: 32
-  num_epochs: 50
+  num_epochs: 2
   optimizer: "SGD"
   lr: 0.001
   momentum: 0.9
-  weight_decay: 0.001
+  weight_decay: 0.01

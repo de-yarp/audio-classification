@@ -63,18 +63,29 @@ def train(
     csv_path: Annotated[
         Path, typer.Argument(..., help="path to your experiments tracker .csv")
     ],
+    cross_val_csv_path: Annotated[
+        Path | None,
+        typer.Option("--cross-val", help="path to cross validation .csv tracker"),
+    ] = None,
     save_model: Annotated[
         bool,
         typer.Option(
-            "--save_model", help="include, if you want to save a model checkpoint"
+            "--save-model", help="include, if you want to save a model checkpoint"
         ),
     ] = False,
 ):
     run_id = str(uuid.uuid4())
     emit = make_emit(logger, run_id)
     try:
-        args = ArgsCLI(cfg_path=cfg_path, csv_path=csv_path, save_model=save_model)
-        validate_args_paths(args.cfg_path, args.csv_path, args.model_path)
+        args = ArgsCLI(
+            cfg_path=cfg_path,
+            csv_path=csv_path,
+            save_model=save_model,
+            cross_val_csv_path=cross_val_csv_path,
+        )
+        validate_args_paths(
+            args.cfg_path, args.csv_path, args.model_path, args.cross_val_csv_path
+        )
         pipe_run(args, logger=logger, run_id=run_id)
     except CLIArgumentError as e:
         emit(

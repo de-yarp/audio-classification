@@ -63,8 +63,8 @@ def evaluate_model(
     avg_loss = eval_loss / len(eval_loader)
     accuracy_pct = (correct / total) * 100
 
-    all_preds_flat = torch.cat(all_preds).numpy()
-    all_labels_flat = torch.cat(all_labels).numpy()
+    all_preds_flat = torch.cat(all_preds).to(device="cpu").numpy()
+    all_labels_flat = torch.cat(all_labels).to(device="cpu").numpy()
 
     emit(
         level="INFO",
