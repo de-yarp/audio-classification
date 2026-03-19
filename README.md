@@ -28,16 +28,26 @@ This reads `config/features.yaml` and writes `.npy` files to `data/processed/esc
 ### Training
 
 ```bash
-uv run audio-clf train <config_path> <csv_path> [--save_model]
+uv run audio-clf train <config_path> <csv_path> [--save_model] [--cross-val <cv_csv_path>]
 ```
 
-Example:
+**Quick run** (single train/val split):
 
 ```bash
 uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save_model
 ```
 
-This runs the training loop, validates each epoch, saves the config to `runs/configs/`, and optionally saves a model checkpoint to `runs/checkpoints/`. Training artifacts (loss curve, accuracy curve) are saved to `runs/artifacts/train/<run_id>/`. A row is appended to the tracker CSV.
+**Cross-validation** (rotates validation fold across all train+val folds):
+
+```bash
+uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save_model --cross-val runs/cnn_mfcc_cross_val_tracker.csv
+```
+
+With `--cross-val`, the pipeline generates all combinations of validation folds from the folds listed in `folds_train` + `folds_val` in the config. For example, with `folds_train: [1, 2, 3]` and `folds_val: [4]` (val size = 1), this produces 4 runs — each using a different single fold for validation and the remaining 3 for training. The seed is reset before each fold run for reproducibility.
+
+Quick runs save artifacts to `runs/artifacts/train/quick/<run_id>/`. Cross-validation runs save per-fold artifacts to `runs/artifacts/train/cv/<cv_run_id>/<child_run_id>/`, with aggregated CV curves (mean ± std) saved to `runs/artifacts/train/cv/<cv_run_id>/`. Each fold run is also logged as a separate row in the train tracker CSV.
+
+Training automatically detects the best available device (CUDA → MPS → CPU).
 
 ### Evaluation
 
@@ -91,19 +101,28 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 ├── models/
 │   ├── cnn_mfcc.py                   # MFCC_CNN: dynamic conv/pool/FC via ModuleList
 │   ├── cnn_mel.py                    # MEL_CNN (placeholder)
-│   ├── lstm_mfcc.py                  # MFCC_LSTM (placeholder)
+│   ├── lstm_mfcc.py                  # MFCC_LSTM: LSTM + dynamic FC head
 │   ├── lstm_mel.py                   # MEL_LSTM (placeholder)
+│   ├── cross_val.py                  # cross-validation loop, fold combination generation
 │   ├── train.py                      # training loop, validation, model/optimizer setup
 │   └── eval.py                       # evaluation loop (inference, preds/labels collection)
 │
 ├── runs/                             # all training/eval outputs (not committed)
-│   ├── configs/                      # saved validated YAML configs per run
-│   ├── checkpoints/                  # model state_dict .pt files
+│   ├── configs/
+│   │   ├── quick/<run_id>/           # saved config for quick runs
+│   │   └── cv/<cv_run_id>/<child_run_id>/  # saved config per CV fold
+│   ├── checkpoints/
+│   │   ├── quick/<run_id>/           # model .pt for quick runs
+│   │   └── cv/<cv_run_id>/<child_run_id>/  # model .pt per CV fold
 │   ├── artifacts/
-│   │   ├── train/<run_id>/           # loss_curve.png, accuracy_curve.png
+│   │   ├── train/
+│   │   │   ├── quick/<run_id>/       # loss_curve.png, accuracy_curve.png
+│   │   │   └── cv/<cv_run_id>/       # cv_loss_curve.png, cv_accuracy_curve.png
+│   │   │       └── <child_run_id>/   # per-fold loss_curve.png, accuracy_curve.png
 │   │   └── eval/<run_id>/            # confusion_matrix.{npy,png}, classification_report.json
-│   ├── your_model_train_tracker.csv  # one per person, training runs
-│   └── your_model_eval_tracker.csv   # one per person, eval runs
+│   ├── your_model_train_tracker.csv  # one per person, training runs (quick + CV folds)
+│   ├── your_model_eval_tracker.csv   # one per person, eval runs
+│   └── your_model_cross_val_tracker.csv  # one per person, CV summary stats
 │
 ├── tests/
 │   ├── test_preprocessing.py
@@ -162,17 +181,40 @@ run:
 
 The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer.
 
-**Note:** The config format above is currently implemented for CNN only. LSTM config and model are not yet built. The `run:` section will be shared between both architectures; the `model:` section will differ (LSTM will have its own layer parameters instead of `conv_layers` and `fc_layers`).
+**Note:** The config format above is for CNN. See below for the LSTM config format. The `run:` section is shared between both architectures; the `model:` section differs.
 
 **Note:** `mfcc_deltas` is only relevant for MFCC experiments (ignored for mel). It must be manually aligned with how features were preprocessed — if `features.yaml` had `include_deltas: true`, set `mfcc_deltas: true` in the experiment config. There is no automatic link between feature extraction and training.
 
+LSTM config uses the same `run:` section but a different `model:` section:
+
+```yaml
+model:
+  model_type: "lstm"          # cnn | lstm
+  repr_type: "mfcc"           # mfcc | mel
+  mfcc_deltas: true           # true → 120 input size, false → 40
+  hidden_size: 128             # LSTM hidden state size
+  num_layers: 2                # number of stacked LSTM layers
+  dropout: 0.3                 # dropout between LSTM layers (0.0 = disabled)
+  fc_layers: [128]             # FC layer sizes after LSTM output (final → num_classes added automatically)
+  num_classes: 50
+
+run:
+  # same as CNN
+```
+
+The LSTM takes the last hidden state from the final layer and passes it through the FC classifier head. Note that `dropout` in the LSTM config applies between stacked LSTM layers (PyTorch's built-in LSTM dropout), not between FC layers as in the CNN config.
+
 ## Tracker CSVs
 
-Each team member maintains their own train and eval tracker CSVs to avoid merge conflicts. These are append-only logs of every run. The `your_model_train_runs_tracker.csv` and `your_model_eval_runs_tracker.csv` files in `runs/` are empty templates for reference — rename them to match your experiment (e.g. `cnn_mfcc_train_tracker.csv`) before use. Keep your CSVs in `runs/` — it's the natural place alongside configs, checkpoints, and artifacts.
+Each team member maintains their own train, eval, and cross-validation tracker CSVs to avoid merge conflicts. These are append-only logs of every run. The template files in `runs/` should be renamed to match your experiment (e.g. `cnn_mfcc_train_tracker.csv`) before use. Keep your CSVs in `runs/` — it's the natural place alongside configs, checkpoints, and artifacts.
 
-Train CSV columns: `ts, run_id, avg_loss_last_train_epoch, avg_loss_val, accuracy_val_pct, cfg_path, model_path, loss_curve_path_png, accuracy_curve_path_png`
+Train CSV columns: `ts, run_id, avg_loss_last_train_epoch, avg_loss_val, accuracy_val_pct, cfg_path, model_path, loss_curve_path_png, accuracy_curve_path_png, cv_run_id`
+
+The `cv_run_id` column is empty for quick runs and contains the parent CV run ID for cross-validation fold runs.
 
 Eval CSV columns: `ts, run_id, avg_loss, accuracy_pct, cfg_path, model_path, eval_folds, report_path_json, confusion_matrix_path_npy, confusion_matrix_path_png`
+
+Cross-validation CSV columns: `ts, cv_run_id, child_run_ids, mean_accuracy, std_accuracy, mean_loss, std_loss, cfg_path`
 
 ## Logging
 
