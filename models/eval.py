@@ -5,10 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from infra.data_models import (
-    ArgsCLI,
-    AudioDataset,
-)
+from infra.data_models import ArgsCLI, AudioDataset, DatasetType
 from infra.log_utils import now_ts_iso
 
 from .train import _setup_model
@@ -36,7 +33,9 @@ def evaluate_model(
     criterion = nn.CrossEntropyLoss()
     eval_loss = 0.0
 
-    eval_ds = AudioDataset(cfg.repr_type, args.eval_folds)
+    eval_ds = AudioDataset(
+        repr_type=cfg.repr_type, folds=args.eval_folds, dataset_type=DatasetType.EVAL
+    )
     eval_loader = DataLoader(eval_ds, batch_size=cfg.batch_size)
 
     all_preds: list[torch.Tensor] = []

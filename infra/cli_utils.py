@@ -15,8 +15,10 @@ from infra.data_models import (
     LayerConv,
     LayerPool,
     ModelType,
+    OptimizerType,
     PoolType,
     ReprType,
+    SchedulerType,
 )
 
 
@@ -72,6 +74,10 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     model_type_str = cfg["model_type"].strip().lower()
     repr_type_str = cfg["repr_type"].strip().lower()
     optimizer_str = cfg["optimizer"].strip().upper()
+    if cfg["scheduler"] is not None:
+        scheduler_str = cfg["scheduler"].strip().upper()
+    else:
+        scheduler_str = None
 
     try:
         model_type = ModelType(model_type_str)
@@ -83,6 +89,21 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     except ValueError as e:
         msg = f"invalid model.repr_type '{repr_type_str}' in config {path}, expected {[e.value for e in ReprType]}"
         raise ValueError(msg) from e
+    try:
+        optimizer_type = OptimizerType(optimizer_str)
+    except ValueError as e:
+        msg = f"invalid run.optimizer '{optimizer_str}' in config {path}, expected {[e.value for e in OptimizerType]}"
+        raise ValueError(msg) from e
+
+    if scheduler_str is not None:
+        try:
+            scheduler_type = SchedulerType(scheduler_str)
+
+        except ValueError as e:
+            msg = f"invalid run.scheduler '{scheduler_str}' in config {path}, expected {[e.value for e in SchedulerType]}"
+            raise ValueError(msg) from e
+    else:
+        scheduler_type = None
 
     if model_type == ModelType.CNN:
         pool_type_str = cfg["pool_type"].strip().lower()
@@ -95,7 +116,8 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
 
     cfg["model_type"] = model_type
     cfg["repr_type"] = repr_type
-    cfg["optimizer"] = optimizer_str
+    cfg["optimizer"] = optimizer_type
+    cfg["scheduler"] = scheduler_type
 
     cfg_class = MODEL_CONFIG_MAP[model_type]
 
@@ -120,6 +142,16 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
 
         elif k_type == float | None:
             assert isinstance(val, float) or val is None, (
+                f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
+            )
+
+        elif k_type == int | None:
+            assert isinstance(val, int) or val is None, (
+                f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
+            )
+
+        elif k_type == SchedulerType | None:
+            assert isinstance(val, SchedulerType) or val is None, (
                 f"invalid key type {path.stem}.[model/run].{key}: '{type(val)}', expected '{k_type}'"
             )
 

@@ -172,14 +172,30 @@ run:
   folds_train: [1, 2, 3]
   folds_val: [4]
   batch_size: 32
-  num_epochs: 2
+  num_epochs: 50
   optimizer: "SGD"            # SGD | ADAM | ADAMW
   lr: 0.001
   momentum: null              # only used with SGD
   weight_decay: 0.0           # L2 regularization (e.g. 1e-4), applies to all optimizers
+
+  scheduler: null              # plateau | cosine | step | null (no scheduling)
+  factor: 0.1                  # LR multiplier on trigger (plateau, step)
+  patience: 5                  # epochs without improvement before LR reduction (plateau only)
+  min_lr: 0.000001             # LR floor (plateau, cosine, step)
+  step_size: null              # reduce LR every N epochs (step only)
+
+  augment: false               # enable SpecAugment data augmentation (training only)
+  freq_masks: 2                # number of frequency masks
+  freq_mask_width: 10          # max frequency mask width in bins
+  time_masks: 2                # number of time masks
+  time_mask_width: 25          # max time mask width in frames
 ```
 
 The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer.
+
+**Learning rate scheduling** is optional. When `scheduler` is set, the specified PyTorch scheduler adjusts the learning rate during training. `plateau` (ReduceLROnPlateau) watches validation loss and reduces LR when improvement stalls. `cosine` (CosineAnnealingLR) smoothly decays LR from the initial value to `min_lr` over all epochs. `step` (StepLR) multiplies LR by `factor` every `step_size` epochs. Each type only uses its relevant parameters — unused fields are ignored. The current learning rate is logged per epoch alongside validation metrics.
+
+**Data augmentation** applies frequency and time masking to training samples only — validation and evaluation always see unmodified data. When `augment: true`, each training sample gets random frequency and time masks applied on-the-fly in `__getitem__`. Each mask has a random width (between 1 and the configured max) and a random position within the tensor. The pipeline validates at dataset creation that the worst-case masking (`freq_masks * freq_mask_width` and `time_masks * time_mask_width`) does not exceed 50% of the respective tensor dimension.
 
 **Note:** The config format above is for CNN. See below for the LSTM config format. The `run:` section is shared between both architectures; the `model:` section differs.
 
@@ -215,6 +231,8 @@ The `cv_run_id` column is empty for quick runs and contains the parent CV run ID
 Eval CSV columns: `ts, run_id, avg_loss, accuracy_pct, cfg_path, model_path, eval_folds, report_path_json, confusion_matrix_path_npy, confusion_matrix_path_png`
 
 Cross-validation CSV columns: `ts, cv_run_id, child_run_ids, mean_accuracy, std_accuracy, mean_loss, std_loss, cfg_path`
+
+`child_run_ids` is stored as a semicolon-joined string.
 
 ## Logging
 

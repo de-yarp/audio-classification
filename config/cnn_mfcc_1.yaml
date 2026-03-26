@@ -42,15 +42,24 @@ model:
 
 run:
   seed: 42
-  folds_train:
-    - 1
-    - 2
-    - 3
-  folds_val:
-    - 4
+  folds_train: [1, 2, 3]
+  folds_val: [4]
   batch_size: 32
-  num_epochs: 2
+  num_epochs: 50
+
   optimizer: "SGD"
   lr: 0.001
   momentum: 0.9
   weight_decay: 0.01
+
+  scheduler: "plateau"
+  factor: 0.1
+  patience: 5
+  min_lr: 0.000001
+  step_size: null
+
+  augment: true
+  freq_masks: 2
+  freq_mask_width: 10
+  time_masks: 2
+  time_mask_width: 25
