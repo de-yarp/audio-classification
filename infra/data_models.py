@@ -1,3 +1,4 @@
+import math
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
@@ -47,6 +48,24 @@ class PoolType(Enum):
     AVG = "avg"
 
 
+class SchedulerType(Enum):
+    PLATEAU = "PLATEAU"
+    COSINE = "COSINE"
+    STEP = "STEP"
+
+
+class OptimizerType(Enum):
+    SGD = "SGD"
+    ADAM = "ADAM"
+    ADAMW = "ADAMW"
+
+
+class DatasetType(Enum):
+    TRAIN = "train"
+    VAL = "val"
+    EVAL = "eval"
+
+
 ESC_50_RAW_PATH = Path("data") / "raw" / "esc50"
 ESC_50_PROCESSED_PATH = Path("data") / "processed" / "esc50"
 LOGS_DIR_PATH = Path("logs")
@@ -54,57 +73,6 @@ LOG_NAME = "log.jsonl"
 MODEL_CHECKPOINTS_DIR_PATH = Path("runs") / "checkpoints"
 MODEL_CONFIGS_DIR_PATH = Path("runs") / "configs"
 MODEL_ARTIFACTS_DIR_PATH = Path("runs") / "artifacts"
-
-
-class AudioDataset(torch.utils.data.Dataset):
-    def __init__(
-        self,
-        repr_type: ReprType,
-        folds: list[int],
-        *,
-        root_dir: Path = ESC_50_PROCESSED_PATH,
-        csv_file: Path = ESC_50_RAW_PATH / "meta" / "esc50.csv",
-    ):
-        self.folds = folds
-        self.repr_dir = root_dir / repr_type.value
-        self.meta_df = pd.read_csv(csv_file, delimiter=",")
-        self.class_names = self._get_class_names()
-        self.available_folds = self.meta_df["fold"].unique()
-        self._validate_input_folds()
-
-        self.samples, self.labels = self._load_samples()
-
-    def _load_samples(self) -> tuple[list[np.ndarray], list[int]]:
-        def _get_path(x: str) -> Path:
-            p = Path(x).with_suffix(".npy")
-            return self.repr_dir / p
-
-        folds_mask = self.meta_df["fold"].isin(self.folds)
-        df = self.meta_df[folds_mask]
-
-        labels = df["target"].to_list()
-        samples_paths = df["filename"].map(_get_path)
-        samples = [np.load(p) for p in samples_paths]
-
-        return samples, labels
-
-    def _validate_input_folds(self) -> None:
-        for fold in self.folds:
-            assert np.any(self.available_folds == fold), (
-                f"could not init AudioDataset class: input folds {self.folds} contain invalid folds, available folds={self.available_folds}"
-            )
-
-    def _get_class_names(self) -> list[str]:
-        class_names_indexed = self.meta_df[["target", "category"]].sort_values(
-            by=["target"]
-        )
-        return class_names_indexed["category"].unique().tolist()
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        return (torch.from_numpy(self.samples[idx]), self.labels[idx])
 
 
 @dataclass(frozen=True)
@@ -142,10 +110,24 @@ class ConfigCNN:
     folds_train: list[int]
     folds_val: list[int]
     num_epochs: int
-    optimizer: str
+
+    optimizer: OptimizerType
     lr: float
     momentum: float | None
     weight_decay: float
+
+    scheduler: SchedulerType | None
+    factor: float | None
+    patience: int | None
+    min_lr: float | None
+    step_size: int | None
+
+    # data augmentation
+    augment: bool
+    freq_masks: int | None
+    freq_mask_width: int | None
+    time_masks: int | None
+    time_mask_width: int | None
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
@@ -178,6 +160,16 @@ class ConfigCNN:
             "lr",
             "momentum",
             "weight_decay",
+            "scheduler",
+            "factor",
+            "patience",
+            "min_lr",
+            "step_size",
+            "augment",
+            "freq_masks",
+            "freq_mask_width",
+            "time_masks",
+            "time_mask_width",
         }
         raw_dict = asdict(self)
         model_dict = {}
@@ -214,10 +206,24 @@ class ConfigLSTM:
     folds_train: list[int]
     folds_val: list[int]
     num_epochs: int
-    optimizer: str
+
+    optimizer: OptimizerType
     lr: float
     momentum: float | None
     weight_decay: float
+
+    scheduler: SchedulerType | None
+    factor: float | None
+    patience: int | None
+    min_lr: float | None
+    step_size: int | None
+
+    # data augmentation
+    augment: bool
+    freq_masks: int | None
+    freq_mask_width: int | None
+    time_masks: int | None
+    time_mask_width: int | None
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
@@ -250,6 +256,16 @@ class ConfigLSTM:
             "lr",
             "momentum",
             "weight_decay",
+            "scheduler",
+            "factor",
+            "patience",
+            "min_lr",
+            "step_size",
+            "augment",
+            "freq_masks",
+            "freq_mask_width",
+            "time_masks",
+            "time_mask_width",
         }
         raw_dict = asdict(self)
         model_dict = {}
@@ -269,10 +285,144 @@ class ConfigLSTM:
         return {"model": model_dict, "run": run_dict}
 
 
+class AudioDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        repr_type: ReprType,
+        folds: list[int],
+        dataset_type: DatasetType,
+        *,
+        cfg: ConfigCNN | ConfigLSTM | None = None,
+        root_dir: Path = ESC_50_PROCESSED_PATH,
+        csv_file: Path = ESC_50_RAW_PATH / "meta" / "esc50.csv",
+    ):
+        self.dataset_type = dataset_type
+        self.folds = folds
+        self.repr_dir = root_dir / repr_type.value
+        self.cfg = cfg
+        self.meta_df = pd.read_csv(csv_file, delimiter=",")
+        self.class_names = self._get_class_names()
+        self.available_folds = self.meta_df["fold"].unique()
+        self._validate_input_folds()
+
+        self.samples, self.labels = self._load_samples()
+
+        self.shape = self._get_shape()
+
+        self._validate_augment()
+
+    def _load_samples(self) -> tuple[list[np.ndarray], list[int]]:
+        def _get_path(x: str) -> Path:
+            p = Path(x).with_suffix(".npy")
+            return self.repr_dir / p
+
+        folds_mask = self.meta_df["fold"].isin(self.folds)
+        df = self.meta_df[folds_mask]
+
+        labels = df["target"].to_list()
+        samples_paths = df["filename"].map(_get_path)
+        samples = [np.load(p) for p in samples_paths]
+
+        return samples, labels
+
+    def _validate_input_folds(self) -> None:
+        for fold in self.folds:
+            assert np.any(self.available_folds == fold), (
+                f"could not init AudioDataset class: input folds {self.folds} contain invalid folds, available folds={self.available_folds}"
+            )
+
+    def _get_class_names(self) -> list[str]:
+        class_names_indexed = self.meta_df[["target", "category"]].sort_values(
+            by=["target"]
+        )
+        return class_names_indexed["category"].unique().tolist()
+
+    def _get_shape(self) -> tuple[int, int]:
+        return self.samples[0].shape
+
+    def _validate_augment(self) -> None:
+        if self.dataset_type == DatasetType.TRAIN and self.cfg is None:
+            msg = f"dataset_type='{self.dataset_type}', but cfg is None; expected cfg of type ConfigCNN | ConfigLSTM."
+            raise TypeError(msg)
+
+        max_signal_override_perc = 50
+
+        if (
+            self.dataset_type == DatasetType.TRAIN
+            and self.cfg is not None
+            and self.cfg.augment
+        ):
+            freq_mask_width = self.cfg.freq_mask_width
+            freq_masks = self.cfg.freq_masks
+            time_mask_width = self.cfg.time_mask_width
+            time_masks = self.cfg.time_masks
+
+            assert freq_mask_width >= 1, (
+                f"expected freq_mask_width >= 1, received cfg.run.freq_mask_width={freq_mask_width}"
+            )
+            assert freq_masks >= 1, (
+                f"expected freq_masks >= 1, received cfg.run.freq_masks={freq_masks}"
+            )
+            assert time_mask_width >= 1, (
+                f"expected time_mask_width >= 1, received cfg.run.time_mask_width={time_mask_width}"
+            )
+            assert time_masks >= 1, (
+                f"expected time_masks >= 1, received cfg.run.time_masks={time_masks}"
+            )
+
+            max_freq_mask_perc = math.ceil(
+                ((freq_mask_width * freq_masks) / self.shape[0]) * 100
+            )
+            max_time_mask_perc = math.ceil(
+                ((time_mask_width * time_masks) / self.shape[1]) * 100
+            )
+
+            assert max_freq_mask_perc <= max_signal_override_perc, (
+                f"augmentation parameters exceed {max_signal_override_perc}% of the signal HEIGHT: max_freq_mask_perc={max_freq_mask_perc}%"
+            )
+            assert max_time_mask_perc <= max_signal_override_perc, (
+                f"augmentation parameters exceed {max_signal_override_perc}% of the signal WIDTH: max_time_mask_perc={max_time_mask_perc}%"
+            )
+
+    def _augment(self, sample: np.ndarray) -> np.ndarray:
+        sample_augmented = sample.copy()
+        freq_masks = self.cfg.freq_masks
+        time_masks = self.cfg.time_masks
+
+        for _ in range(freq_masks):
+            freq_mask_width = np.random.randint(1, self.cfg.freq_mask_width + 1)
+            pos = np.random.randint(0, (self.shape[0] - freq_mask_width + 1))
+            sample_augmented[pos : (pos + freq_mask_width), :].fill(0.0)
+
+        for _ in range(time_masks):
+            time_mask_width = np.random.randint(1, self.cfg.time_mask_width + 1)
+            pos = np.random.randint(0, (self.shape[1] - time_mask_width) + 1)
+            sample_augmented[:, pos : (pos + time_mask_width)].fill(0.0)
+
+        return sample_augmented
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+        if self.dataset_type == DatasetType.TRAIN and self.cfg.augment:
+            sample = self._augment(self.samples[idx])
+        else:
+            sample = self.samples[idx]
+
+        return (torch.from_numpy(sample), self.labels[idx])
+
+
 OPTIMIZER_MAP: dict[str, type[optim.Optimizer]] = {
     "SGD": optim.SGD,
     "ADAM": optim.Adam,
     "ADAMW": optim.AdamW,
+}
+
+SCHEDULER_MAP: dict[str, type[optim.lr_scheduler.LRScheduler]] = {
+    "PLATEAU": optim.lr_scheduler.ReduceLROnPlateau,
+    "COSINE": optim.lr_scheduler.CosineAnnealingLR,
+    "STEP": optim.lr_scheduler.StepLR,
 }
 
 

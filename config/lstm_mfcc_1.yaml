@@ -23,3 +23,15 @@ run:
   lr: 0.001
   momentum: null
   weight_decay: 0.0
+
+  scheduler: "plateau"
+  factor: 0.1
+  patience: 5
+  min_lr: 0.000001
+  step_size: null
+
+  augment: true
+  freq_masks: 2
+  freq_mask_width: 10
+  time_masks: 2
+  time_mask_width: 25

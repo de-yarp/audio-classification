@@ -8,12 +8,15 @@ from torch.utils.data import DataLoader
 
 from infra.data_models import (
     OPTIMIZER_MAP,
+    SCHEDULER_MAP,
     ArgsCLI,
     AudioDataset,
     ConfigCNN,
     ConfigLSTM,
+    DatasetType,
     ModelType,
     ReprType,
+    SchedulerType,
 )
 from infra.log_utils import now_ts_iso
 
@@ -28,7 +31,8 @@ COMPONENT = __name__
 def _setup_optimizer(
     net: nn.Module, cfg: ConfigCNN | ConfigLSTM, cfg_path: Path
 ) -> optim.Optimizer:
-    opt_class = OPTIMIZER_MAP.get(cfg.optimizer, None)
+    optimizer_type = cfg.optimizer
+    opt_class = OPTIMIZER_MAP.get(optimizer_type.value, None)
     if opt_class is None:
         msg = f"invalid run.optimizer '{cfg.optimizer}' in config {cfg_path}, expected {OPTIMIZER_MAP.keys()}"
         raise ValueError(msg)
@@ -42,6 +46,42 @@ def _setup_optimizer(
         )
 
     return opt_class(params=net.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+
+
+def _setup_scheduler(
+    optimizer: optim.Optimizer, cfg: ConfigCNN | ConfigLSTM, cfg_path: Path
+) -> optim.lr_scheduler.LRScheduler | None:
+    scheduler_type = cfg.scheduler
+    if scheduler_type is None:
+        return None
+
+    scheduler_class = SCHEDULER_MAP.get(scheduler_type.value, None)
+    if scheduler_type != SchedulerType.COSINE:
+        assert cfg.factor is not None, (
+            f"invalid run.factor '{cfg.factor}' in config {cfg_path}, for expected scheduler type '{scheduler_type.value}'"
+        )
+    if scheduler_type == SchedulerType.PLATEAU:
+        assert cfg.patience is not None, (
+            f"invalid run.patience '{cfg.patience}' in config {cfg_path}, for expected scheduler type '{scheduler_type.value}'"
+        )
+    if scheduler_type == SchedulerType.STEP:
+        assert cfg.step_size is not None, (
+            f"invalid run.step_size '{cfg.step_size}' in config {cfg_path}, for expected scheduler type '{scheduler_type.value}'"
+        )
+    assert cfg.min_lr is not None, (
+        f"invalid run.min_lr '{cfg.min_lr}' in config {cfg_path}, for expected scheduler type '{scheduler_type.value}'"
+    )
+
+    if scheduler_type == SchedulerType.PLATEAU:
+        return scheduler_class(
+            optimizer, factor=cfg.factor, patience=cfg.patience, min_lr=cfg.min_lr
+        )
+    elif scheduler_type == SchedulerType.COSINE:
+        return scheduler_class(optimizer, T_max=cfg.num_epochs, eta_min=cfg.min_lr)
+    elif scheduler_type == SchedulerType.STEP:
+        return scheduler_class(optimizer, step_size=cfg.step_size, gamma=cfg.factor)
+    else:
+        return None
 
 
 def _setup_model(
@@ -85,6 +125,7 @@ def run_validation(
     net: nn.Module,
     val_loader: DataLoader,
     criterion: nn.CrossEntropyLoss,
+    current_lr: float,
     device: torch.device,
     emit: Callable[[str, str, str, dict], None],
 ) -> tuple[float, float]:
@@ -116,6 +157,7 @@ def run_validation(
         payload={
             "avg_loss": round(avg_loss, 4),
             "accuracy_pct": round(accuracy_pct, 4),
+            "lr": current_lr,
         },
     )
 
@@ -142,9 +184,17 @@ def training_loop(
 
     criterion = nn.CrossEntropyLoss()
     optimizer = _setup_optimizer(net, cfg, args.cfg_path)
+    scheduler = _setup_scheduler(optimizer, cfg, args.cfg_path)
 
-    train_ds = AudioDataset(cfg.repr_type, folds=cfg.folds_train)
-    val_ds = AudioDataset(cfg.repr_type, folds=cfg.folds_val)
+    train_ds = AudioDataset(
+        repr_type=cfg.repr_type,
+        folds=cfg.folds_train,
+        dataset_type=DatasetType.TRAIN,
+        cfg=cfg,
+    )
+    val_ds = AudioDataset(
+        cfg.repr_type, folds=cfg.folds_val, dataset_type=DatasetType.VAL
+    )
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=cfg.batch_size, shuffle=False)
 
@@ -188,12 +238,18 @@ def training_loop(
         avg_loss_last_train_epoch = running_loss / len(train_loader)
 
         avg_loss_val, accuracy_val_pct = run_validation(
-            net, val_loader, criterion, device, emit
+            net, val_loader, criterion, optimizer.param_groups[0]["lr"], device, emit
         )
 
         train_losses.append(avg_loss_last_train_epoch)
         val_losses.append(avg_loss_val)
         val_accuracies.append(accuracy_val_pct)
+
+        if scheduler is not None:
+            if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(avg_loss_val)
+            else:
+                scheduler.step()
 
     emit(
         level="INFO",
