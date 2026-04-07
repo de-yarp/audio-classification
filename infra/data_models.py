@@ -2,10 +2,12 @@ import math
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
+from typing import Callable, TypedDict
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import yaml
 
@@ -445,6 +447,17 @@ class ArgsCLI:
     cross_val_csv_path: Path | None = None
     model_path: Path | None = None
     eval_folds: list[int] | None = None
+
+
+class TrainRunInfo(TypedDict):
+    net: nn.Module
+    cfg_instance: ConfigCNN | ConfigLSTM
+    content: dict
+    run_id: str
+    args: ArgsCLI
+    train_info_for_plots: dict
+    emit: Callable[[str, str, str, dict], None]
+    cv_run_id: str | None
 
 
 class CLIArgumentError(Exception):
