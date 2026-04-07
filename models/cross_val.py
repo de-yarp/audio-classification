@@ -4,8 +4,7 @@ from itertools import combinations
 from typing import Callable
 
 from infra.cli_utils import set_seed
-from infra.data_models import ArgsCLI
-from infra.io_utils import save_train_run_info
+from infra.data_models import ArgsCLI, TrainRunInfo
 from infra.log_utils import make_emit, now_ts_iso
 
 from .train import training_loop
@@ -34,7 +33,7 @@ def cross_validation_loop(
     emit: Callable[[str, str, str, dict], None],
     cv_run_id: str,
     args: ArgsCLI,
-) -> tuple[dict, list[dict]]:
+) -> tuple[dict, list[TrainRunInfo], list[dict]]:
 
     emit(
         level="INFO",
@@ -45,6 +44,7 @@ def cross_validation_loop(
 
     fold_combinations = _get_fold_combinations(cfg_dict)
     cv_train_info: list[dict] = []
+    train_runs: list[TrainRunInfo] = []
     child_run_ids = []
 
     cfg_dict_child = cfg_dict.copy()
@@ -65,18 +65,30 @@ def cross_validation_loop(
             cv_run_id=cv_run_id,
         )
 
+        save_params: TrainRunInfo = {
+            "net": net,
+            "cfg_instance": cfg,
+            "content": content,
+            "run_id": run_id_child,
+            "args": args,
+            "cv_run_id": cv_run_id,
+            "train_info_for_plots": train_info_for_plots,
+            "emit": emit_child,
+        }
+        train_runs.append(save_params)
+
         cv_train_info.append(train_info_for_plots)
 
-        save_train_run_info(
-            net,
-            cfg,
-            content,
-            run_id_child,
-            args=args,
-            cv_run_id=cv_run_id,
-            train_info_for_plots=train_info_for_plots,
-            emit=emit_child,
-        )
+        # save_train_run_info(
+        #     net,
+        #     cfg,
+        #     content,
+        #     run_id_child,
+        #     args=args,
+        #     cv_run_id=cv_run_id,
+        #     train_info_for_plots=train_info_for_plots,
+        #     emit=emit_child,
+        # )
 
     emit(
         level="INFO",
@@ -91,4 +103,4 @@ def cross_validation_loop(
         "child_run_ids": ";".join(child_run_ids),
     }
 
-    return content, cv_train_info
+    return content, train_runs, cv_train_info

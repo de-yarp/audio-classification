@@ -48,9 +48,13 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
 
     if pipe_type == "train":
         if args.cross_val_csv_path is not None:
-            content, cv_train_info = cross_validation_loop(
+            content, train_runs, cv_train_info = cross_validation_loop(
                 cfg_dict_norm, logger=logger, emit=emit, cv_run_id=run_id, args=args
             )
+
+            for train_run in train_runs:
+                save_train_run_info(**train_run)
+
             save_cross_val_artifacts(
                 content, run_id, args=args, cv_train_info=cv_train_info, emit=emit
             )
