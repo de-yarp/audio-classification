@@ -1,6 +1,8 @@
 import logging
 from time import perf_counter
 
+import torch
+
 from infra.cli_utils import normalize_and_validate_config, set_seed, validate_eval_folds
 from infra.data_models import ArgsCLI
 from infra.io_utils import (
@@ -45,6 +47,11 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
 
     seed = cfg_dict_norm["seed"]
     set_seed(seed)
+
+    # warm up MPS before first fold touches it
+    if torch.backends.mps.is_available():
+        _ = torch.zeros(1, device="mps")
+        torch.mps.synchronize()
 
     if pipe_type == "train":
         if args.cross_val_csv_path is not None:

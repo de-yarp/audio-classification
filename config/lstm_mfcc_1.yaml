@@ -30,6 +30,10 @@ run:
   min_lr: 0.000001
   step_size: null
 
+  warmup_lr: False
+  warmup_epochs: null
+  warmup_lr_val: null
+
   augment: true
   freq_masks: 2
   freq_mask_width: 10

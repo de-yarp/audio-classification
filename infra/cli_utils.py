@@ -27,6 +27,15 @@ def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
 
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
+
 
 def _validate_cnn_layers(val: dict, key: str, path: Path):
     new_layers = []
@@ -42,9 +51,21 @@ def _validate_cnn_layers(val: dict, key: str, path: Path):
         new_layer = {}
         for f1 in fields(layer_class):
             val_1 = layer[f1.name]
-            assert isinstance(val_1, f1.type), (
-                f"invalid key type {path.stem}.[model/run].{key}.{f1.name}: '{type(val_1)}', expected '{f1.type}'"
-            )
+            # --- new
+            if f1.type == int | list[int]:
+                if isinstance(val_1, list):
+                    assert len(val_1) == 2
+                    for i in val_1:
+                        assert isinstance(i, int)
+                        assert i > 0
+                else:
+                    assert isinstance(val_1, int)
+            # --- new
+            else:
+                assert isinstance(val_1, f1.type), (
+                    f"invalid key type {path.stem}.[model/run].{key}.{f1.name}: '{type(val_1)}', expected '{f1.type}'"
+                )
+
             new_layer[f1.name] = val_1
 
         new_layers.append(layer_class(**new_layer))
@@ -139,6 +160,14 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
                 assert isinstance(i, int), (
                     f"invalid key type {path.stem}.[model/run].{key}: '{type(i)}', expected 'int'"
                 )
+
+        elif k_type == list[int] | None:
+            assert isinstance(val, list) or val is None
+            if isinstance(val, list):
+                if key == "global_avg_pool":
+                    assert len(val) == 2
+                for i in val:
+                    assert isinstance(i, int)
 
         elif k_type == float | None:
             assert isinstance(val, float) or val is None, (

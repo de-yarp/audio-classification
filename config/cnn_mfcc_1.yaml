@@ -2,36 +2,37 @@ model:
   model_type: "cnn"
   repr_type: "mfcc"
   mfcc_deltas: True
+  stack_deltas_as_channels: True
   conv_layers:
     - type: "conv"
       kernel_count: 32
-      kernel_size: 3
+      kernel_size: [3, 5]
       stride: 1
       padding: 0
       batch_norm: True
     - type: "pool"
-      kernel_size: 2
-      stride: 2
+      kernel_size: [1, 2]
+      stride: [1, 2]
       padding: 0
     - type: "conv"
       kernel_count: 64
-      kernel_size: 3
+      kernel_size: [3, 5]
       stride: 1
       padding: 0
       batch_norm: True
     - type: "pool"
-      kernel_size: 2
-      stride: 2
+      kernel_size: [1, 2]
+      stride: [1, 2]
       padding: 0
     - type: "conv"
       kernel_count: 96
-      kernel_size: 3
+      kernel_size: [3, 5]
       stride: 1
       padding: 0
       batch_norm: True
     - type: "pool"
-      kernel_size: 2
-      stride: 2
+      kernel_size: [1, 2]
+      stride: [1, 2]
       padding: 0
   pool_type: "max"
   fc_layers:
@@ -39,18 +40,23 @@ model:
     - 128
   dropout: 0.5
   num_classes: 50
+  global_avg_pool: null
 
 run:
-  seed: 42
+  seed: 123
   folds_train: [1, 2, 3]
   folds_val: [4]
   batch_size: 32
-  num_epochs: 50
+  num_epochs: 100
 
   optimizer: "SGD"
   lr: 0.001
   momentum: 0.9
   weight_decay: 0.01
+
+  warmup_lr: true
+  warmup_epochs: 5
+  warmup_lr_val: 0.00001
 
   scheduler: "plateau"
   factor: 0.1
@@ -59,7 +65,7 @@ run:
   step_size: null
 
   augment: true
-  freq_masks: 2
+  freq_masks: 0
   freq_mask_width: 10
   time_masks: 2
   time_mask_width: 25

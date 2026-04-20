@@ -78,7 +78,8 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 .
 ├── config/
 │   ├── cnn_mfcc_1.yaml              # experiment config (architecture + training params)
-│   └── features.yaml                 # feature extraction params (n_fft, hop_length, etc.)
+│   ├── lstm_mfcc_1.yaml             # LSTM experiment config
+│   └── features.yaml                # feature extraction params (n_fft, hop_length, etc.)
 │
 ├── data/
 │   ├── raw/esc50/
@@ -142,72 +143,97 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 └── uv.lock
 ```
 
+## Features Config
+
+Feature extraction is controlled by `config/features.yaml`:
+
+```yaml
+n_fft: 2048                    # FFT window size
+hop_length: 512                # hop length between frames
+n_mels: 128                    # number of mel filterbanks (mel only)
+n_mfcc: 40                     # number of MFCC coefficients
+normalize_mfcc: false          # per-coefficient normalization (divides by std per coeff axis)
+include_deltas: true           # compute delta and delta-delta features
+stack_deltas_as_channels: true # true → (3, 40, T) channel-stacked; false → (120, T) height-concat
+```
+
+**Note:** `stack_deltas_as_channels` only applies when `include_deltas: true`. With channel-stacking, static MFCCs, deltas, and delta-deltas are stored as separate channels — giving shape `(3, n_mfcc, T)` instead of `(3*n_mfcc, T)`. This must be manually aligned with `stack_deltas_as_channels` in the experiment config. If you change this setting, delete `data/processed/esc50/` first — feature extraction raises `FileExistsError` if the output directory already contains processed files.
+
 ## Config Format
 
 Experiment configs live in `config/` and have two sections:
 
 ```yaml
 model:
-  model_type: "cnn"           # cnn | lstm
-  repr_type: "mfcc"           # mfcc | mel
-  mfcc_deltas: true           # true → 120 channels (MFCC + delta + delta2), false → 40 channels
-  conv_layers:                # list of conv/pool layers (CNN only)
+  model_type: "cnn"                # cnn | lstm
+  repr_type: "mfcc"                # mfcc | mel
+  mfcc_deltas: true                # true → include delta features, false → static only
+  stack_deltas_as_channels: true   # true → input shape (3, 40, T); false → (120, T)
+                                   # must match stack_deltas_as_channels in features.yaml
+  conv_layers:                     # list of conv/pool layers (CNN only)
     - type: "conv"
-      kernel_count: 16
-      kernel_size: 3
-      stride: 1
+      kernel_count: 32
+      kernel_size: [3, 5]          # int for symmetric, [height, width] for asymmetric
+      stride: 1                    # int or [height, width]
       padding: 0
       batch_norm: true
     - type: "pool"
-      kernel_size: 2
-      stride: 2
+      kernel_size: [1, 2]          # int for symmetric, [height, width] for asymmetric
+      stride: [1, 2]               # int or [height, width]
       padding: 0
-  pool_type: "max"             # max | avg (applies to all pool layers)
-  fc_layers: [512, 128]       # FC layer sizes (final → num_classes added automatically)
-  dropout: 0.0                # dropout rate between FC layers (0.0 = disabled)
+  pool_type: "max"                 # max | avg (applies to all pool layers)
+  fc_layers: [512, 128]            # FC layer sizes (final → num_classes added automatically)
+  dropout: 0.5                     # dropout rate between FC layers (0.0 = disabled)
   num_classes: 50
+  global_avg_pool: null            # [h, w] to apply global avg pool before FC, null to disable
 
 run:
   seed: 42
   folds_train: [1, 2, 3]
   folds_val: [4]
   batch_size: 32
-  num_epochs: 50
-  optimizer: "SGD"            # SGD | ADAM | ADAMW
+  num_epochs: 100
+  optimizer: "SGD"                 # SGD | Adam | AdamW
   lr: 0.001
-  momentum: null              # only used with SGD
-  weight_decay: 0.0           # L2 regularization (e.g. 1e-4), applies to all optimizers
+  momentum: 0.9                    # only used with SGD; set null for Adam/AdamW
+  weight_decay: 0.01               # L2 regularization, applies to all optimizers
 
-  scheduler: null              # plateau | cosine | step | null (no scheduling)
-  factor: 0.1                  # LR multiplier on trigger (plateau, step)
-  patience: 5                  # epochs without improvement before LR reduction (plateau only)
-  min_lr: 0.000001             # LR floor (plateau, cosine, step)
-  step_size: null              # reduce LR every N epochs (step only)
+  warmup_lr: true                  # enable LR warmup phase
+  warmup_epochs: 5                 # number of warmup epochs (LR ramps from warmup_lr_val to lr)
+  warmup_lr_val: 0.00001           # starting LR for warmup; ignored if warmup_lr is false
 
-  augment: false               # enable SpecAugment data augmentation (training only)
-  freq_masks: 2                # number of frequency masks
-  freq_mask_width: 10          # max frequency mask width in bins
-  time_masks: 2                # number of time masks
-  time_mask_width: 25          # max time mask width in frames
+  scheduler: "plateau"             # plateau | cosine | step | null (no scheduling)
+  factor: 0.1                      # LR multiplier on trigger (plateau, step)
+  patience: 5                      # epochs without improvement before LR reduction (plateau only)
+  min_lr: 0.000001                 # LR floor (plateau, cosine, step)
+  step_size: null                  # reduce LR every N epochs (step only)
+
+  augment: true                    # enable SpecAugment data augmentation (training only)
+  freq_masks: 0                    # number of frequency masks (set 0 for MFCC — cepstral axis is not frequency)
+  freq_mask_width: 10              # max frequency mask width in bins
+  time_masks: 2                    # number of time masks
+  time_mask_width: 25              # max time mask width in frames
 ```
 
-The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer.
+The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer. Both `kernel_size` and `stride` accept either a single integer (symmetric) or a `[height, width]` list (asymmetric).
+
+**LR warmup** is optional. When `warmup_lr: true`, the training loop linearly ramps the learning rate from `warmup_lr_val` to `lr` over `warmup_epochs` epochs before handing off to the scheduler. The scheduler does not step during the warmup phase. Warmup applies per fold in cross-validation. Set `warmup_lr: false` to disable — `warmup_epochs` and `warmup_lr_val` are ignored in that case.
 
 **Learning rate scheduling** is optional. When `scheduler` is set, the specified PyTorch scheduler adjusts the learning rate during training. `plateau` (ReduceLROnPlateau) watches validation loss and reduces LR when improvement stalls. `cosine` (CosineAnnealingLR) smoothly decays LR from the initial value to `min_lr` over all epochs. `step` (StepLR) multiplies LR by `factor` every `step_size` epochs. Each type only uses its relevant parameters — unused fields are ignored. The current learning rate is logged per epoch alongside validation metrics.
 
-**Data augmentation** applies frequency and time masking to training samples only — validation and evaluation always see unmodified data. When `augment: true`, each training sample gets random frequency and time masks applied on-the-fly in `__getitem__`. Each mask has a random width (between 1 and the configured max) and a random position within the tensor. The pipeline validates at dataset creation that the worst-case masking (`freq_masks * freq_mask_width` and `time_masks * time_mask_width`) does not exceed 50% of the respective tensor dimension.
+**Data augmentation** applies frequency and time masking to training samples only — validation and evaluation always see unmodified data. When `augment: true`, each training sample gets random frequency and time masks applied on-the-fly in `__getitem__`. Each mask has a random width (between 1 and the configured max) and a random position within the tensor. For channel-stacked inputs `(3, n_mfcc, T)`, masking correctly targets axis 1 (coefficients) and axis 2 (time), leaving the channel axis untouched. The pipeline validates at dataset creation that the worst-case masking does not exceed 50% of the respective dimension.
 
-**Note:** The config format above is for CNN. See below for the LSTM config format. The `run:` section is shared between both architectures; the `model:` section differs.
+**Note:** Frequency masking is inappropriate for MFCCs — the cepstral coefficient axis is not a frequency axis. Set `freq_masks: 0` for all MFCC experiments.
 
-**Note:** `mfcc_deltas` is only relevant for MFCC experiments (ignored for mel). It must be manually aligned with how features were preprocessed — if `features.yaml` had `include_deltas: true`, set `mfcc_deltas: true` in the experiment config. There is no automatic link between feature extraction and training.
+**Note:** `mfcc_deltas` and `stack_deltas_as_channels` must be manually aligned with `include_deltas` and `stack_deltas_as_channels` in `features.yaml`. There is no automatic link between feature extraction and training.
 
 LSTM config uses the same `run:` section but a different `model:` section:
 
 ```yaml
 model:
-  model_type: "lstm"          # cnn | lstm
-  repr_type: "mfcc"           # mfcc | mel
-  mfcc_deltas: true           # true → 120 input size, false → 40
+  model_type: "lstm"           # cnn | lstm
+  repr_type: "mfcc"            # mfcc | mel
+  mfcc_deltas: true            # true → 120 input size, false → 40
   hidden_size: 128             # LSTM hidden state size
   num_layers: 2                # number of stacked LSTM layers
   dropout: 0.3                 # dropout between LSTM layers (0.0 = disabled)
@@ -218,7 +244,7 @@ run:
   # same as CNN
 ```
 
-The LSTM takes the last hidden state from the final layer and passes it through the FC classifier head. Note that `dropout` in the LSTM config applies between stacked LSTM layers (PyTorch's built-in LSTM dropout), not between FC layers as in the CNN config.
+The LSTM takes the last hidden state from the final layer and passes it through the FC classifier head. `dropout` in the LSTM config applies between stacked LSTM layers (PyTorch's built-in LSTM dropout), not between FC layers as in the CNN config. Channel-stacked inputs `(3, n_mfcc, T)` are automatically reshaped to `(n_mfcc*3, T)` in the forward pass — the LSTM sees the same 120-dimensional feature vector per timestep regardless of stacking mode, so `stack_deltas_as_channels` has no effect on the LSTM model and does not need to be set in the LSTM config.
 
 ## Tracker CSVs
 

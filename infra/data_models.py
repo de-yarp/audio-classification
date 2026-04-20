@@ -18,7 +18,9 @@ class FeatureConfig:
     hop_length: int
     n_mels: int
     n_mfcc: int
-    include_deltas: bool
+    normalize_mfcc: bool = False
+    include_deltas: bool = False
+    stack_deltas_as_channels: bool = False
 
     @classmethod
     def from_yaml(cls, path: Path):
@@ -80,7 +82,7 @@ MODEL_ARTIFACTS_DIR_PATH = Path("runs") / "artifacts"
 @dataclass(frozen=True)
 class LayerConv:
     kernel_count: int
-    kernel_size: int
+    kernel_size: int | list[int]
     stride: int
     padding: int
     batch_norm: bool = False
@@ -89,8 +91,8 @@ class LayerConv:
 
 @dataclass(frozen=True)
 class LayerPool:
-    kernel_size: int
-    stride: int
+    kernel_size: int | list[int]
+    stride: int | list[int]
     padding: int
     type: str = "pool"
 
@@ -105,6 +107,7 @@ class ConfigCNN:
     fc_layers: list[int]
     dropout: float
     num_classes: int
+    global_avg_pool: list[int] | None
 
     # run config
     seed: int
@@ -117,6 +120,10 @@ class ConfigCNN:
     lr: float
     momentum: float | None
     weight_decay: float
+
+    warmup_lr: bool
+    warmup_epochs: int | None
+    warmup_lr_val: float | None
 
     scheduler: SchedulerType | None
     factor: float | None
@@ -133,6 +140,7 @@ class ConfigCNN:
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
+    stack_deltas_as_channels: bool = False
 
     @classmethod
     def from_dict(cls, input: dict):
@@ -149,8 +157,10 @@ class ConfigCNN:
             "fc_layers",
             "num_classes",
             "mfcc_deltas",
+            "stack_deltas_as_channels",
             "pool_type",
             "dropout",
+            "global_avg_pool",
         }
         run_keys = {
             "seed",
@@ -162,6 +172,9 @@ class ConfigCNN:
             "lr",
             "momentum",
             "weight_decay",
+            "warmup_lr",
+            "warmup_epochs",
+            "warmup_lr_val",
             "scheduler",
             "factor",
             "patience",
@@ -214,6 +227,10 @@ class ConfigLSTM:
     momentum: float | None
     weight_decay: float
 
+    warmup_lr: bool
+    warmup_epochs: int | None
+    warmup_lr_val: float | None
+
     scheduler: SchedulerType | None
     factor: float | None
     patience: int | None
@@ -258,6 +275,9 @@ class ConfigLSTM:
             "lr",
             "momentum",
             "weight_decay",
+            "warmup_lr",
+            "warmup_epochs",
+            "warmup_lr_val",
             "scheduler",
             "factor",
             "patience",
@@ -339,7 +359,7 @@ class AudioDataset(torch.utils.data.Dataset):
         )
         return class_names_indexed["category"].unique().tolist()
 
-    def _get_shape(self) -> tuple[int, int]:
+    def _get_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         return self.samples[0].shape
 
     def _validate_augment(self) -> None:
@@ -362,8 +382,8 @@ class AudioDataset(torch.utils.data.Dataset):
             assert freq_mask_width >= 1, (
                 f"expected freq_mask_width >= 1, received cfg.run.freq_mask_width={freq_mask_width}"
             )
-            assert freq_masks >= 1, (
-                f"expected freq_masks >= 1, received cfg.run.freq_masks={freq_masks}"
+            assert freq_masks >= 0, (
+                f"expected freq_masks >= 0, received cfg.run.freq_masks={freq_masks}"
             )
             assert time_mask_width >= 1, (
                 f"expected time_mask_width >= 1, received cfg.run.time_mask_width={time_mask_width}"
@@ -372,11 +392,14 @@ class AudioDataset(torch.utils.data.Dataset):
                 f"expected time_masks >= 1, received cfg.run.time_masks={time_masks}"
             )
 
+            freq_axis = -2
+            time_axis = -1
+
             max_freq_mask_perc = math.ceil(
-                ((freq_mask_width * freq_masks) / self.shape[0]) * 100
+                ((freq_mask_width * freq_masks) / self.shape[freq_axis]) * 100
             )
             max_time_mask_perc = math.ceil(
-                ((time_mask_width * time_masks) / self.shape[1]) * 100
+                ((time_mask_width * time_masks) / self.shape[time_axis]) * 100
             )
 
             assert max_freq_mask_perc <= max_signal_override_perc, (
@@ -391,15 +414,23 @@ class AudioDataset(torch.utils.data.Dataset):
         freq_masks = self.cfg.freq_masks
         time_masks = self.cfg.time_masks
 
+        freq_domain = self.shape[1] if sample.ndim == 3 else self.shape[0]
+        time_domain = self.shape[2] if sample.ndim == 3 else self.shape[1]
         for _ in range(freq_masks):
             freq_mask_width = np.random.randint(1, self.cfg.freq_mask_width + 1)
-            pos = np.random.randint(0, (self.shape[0] - freq_mask_width + 1))
-            sample_augmented[pos : (pos + freq_mask_width), :].fill(0.0)
+            pos = np.random.randint(0, (freq_domain - freq_mask_width + 1))
+            if sample.ndim == 3:
+                sample_augmented[:, pos : (pos + freq_mask_width), :].fill(0.0)
+            else:
+                sample_augmented[pos : (pos + freq_mask_width), :].fill(0.0)
 
         for _ in range(time_masks):
             time_mask_width = np.random.randint(1, self.cfg.time_mask_width + 1)
-            pos = np.random.randint(0, (self.shape[1] - time_mask_width) + 1)
-            sample_augmented[:, pos : (pos + time_mask_width)].fill(0.0)
+            pos = np.random.randint(0, (time_domain - time_mask_width) + 1)
+            if sample.ndim == 3:
+                sample_augmented[:, :, pos : (pos + time_mask_width)].fill(0.0)
+            else:
+                sample_augmented[:, pos : (pos + time_mask_width)].fill(0.0)
 
         return sample_augmented
 
