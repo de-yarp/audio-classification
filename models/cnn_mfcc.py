@@ -16,8 +16,9 @@ class MFCC_CNN(nn.Module):
         self.conv_layers_list = nn.ModuleList()
         self.fc_layers_list = nn.ModuleList()
         self.dropout = cfg.dropout
-        out_channels = 1
-        height = 120 if cfg.mfcc_deltas else 40
+        self.global_avg_pool: nn.AdaptiveAvgPool2d | None = None
+        out_channels = 3 if (cfg.mfcc_deltas and cfg.stack_deltas_as_channels) else 1
+        height = 120 if (cfg.mfcc_deltas and not cfg.stack_deltas_as_channels) else 40
         width = 216
         pool2d = None
         if cfg.pool_type == PoolType.MAX:
@@ -30,13 +31,22 @@ class MFCC_CNN(nn.Module):
 
         for layer in cfg.conv_layers:
             kernel_count = -1
+
+            kernel_size: int | list[int] = layer.kernel_size
+            if isinstance(kernel_size, list):
+                kernel_size: tuple[int, int] = tuple(kernel_size)
+
+            kernel_stride: int | list[int] = layer.stride
+            if isinstance(kernel_stride, list):
+                kernel_stride: tuple[int, int] = tuple(kernel_stride)
+
             if isinstance(layer, LayerConv):
                 self.conv_layers_list.append(
                     nn.Conv2d(
                         out_channels,
                         layer.kernel_count,
-                        layer.kernel_size,
-                        layer.stride,
+                        kernel_size,
+                        kernel_stride,
                         layer.padding,
                     )
                 )
@@ -47,8 +57,8 @@ class MFCC_CNN(nn.Module):
             if isinstance(layer, LayerPool):
                 self.conv_layers_list.append(
                     pool2d(
-                        layer.kernel_size,
-                        layer.stride,
+                        kernel_size,
+                        kernel_stride,
                         layer.padding,
                     )
                 )
@@ -56,14 +66,21 @@ class MFCC_CNN(nn.Module):
 
             out_channels, height, width = self._post_transform_shape(
                 kernel_count,
-                layer.kernel_size,
-                layer.stride,
+                kernel_size,
+                kernel_stride,
                 layer.padding,
                 width,
                 height,
             )
 
-        flat_tensor_shape = out_channels * height * width
+        if cfg.global_avg_pool is not None:
+            self.global_avg_pool = nn.AdaptiveAvgPool2d(tuple(cfg.global_avg_pool))
+            flat_tensor_shape = (
+                out_channels * cfg.global_avg_pool[0] * cfg.global_avg_pool[1]
+            )
+        else:
+            flat_tensor_shape = out_channels * height * width
+
         fc_layers = cfg.fc_layers
 
         last_fc_out_channels = fc_layers[0]
@@ -80,14 +97,18 @@ class MFCC_CNN(nn.Module):
     def _post_transform_shape(
         self,
         out_channels: int,
-        kernel_size: int,
-        stride: int,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int],
         padding: int,
         width: int,
         height: int,
     ):
-        new_height = floor((height - kernel_size + 2 * padding) / stride) + 1
-        new_width = floor((width - kernel_size + 2 * padding) / stride) + 1
+        kH, kW = (
+            (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+        )
+        sH, sW = (stride, stride) if isinstance(stride, int) else stride
+        new_height = floor((height - kH + 2 * padding) / sH) + 1
+        new_width = floor((width - kW + 2 * padding) / sW) + 1
         return (out_channels, new_height, new_width)
 
     def forward(self, x: torch.Tensor):
@@ -97,7 +118,8 @@ class MFCC_CNN(nn.Module):
             except IndexError:
                 return False
 
-        x = x.unsqueeze(1)
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
         for idx, conv in enumerate(self.conv_layers_list):
             # conv with batch norm next → no relu. conv without batch norm next → relu. batch norm → relu (falls through to last line). pool → no relu
             if isinstance(conv, nn.MaxPool2d) or _is_next_batch_norm(
@@ -106,6 +128,10 @@ class MFCC_CNN(nn.Module):
                 x = conv(x)
                 continue
             x = self.activation_fn(conv(x))
+
+        if self.global_avg_pool is not None:
+            device = x.device
+            x = self.global_avg_pool(x.cpu()).to(device)
 
         x = torch.flatten(x, 1)
 

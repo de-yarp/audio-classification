@@ -209,6 +209,17 @@ def training_loop(
         running_loss = 0.0
 
         net.train()
+
+        if cfg.warmup_lr:
+            warmup_epochs = cfg.warmup_epochs
+            warmup_lr = cfg.warmup_lr_val
+            lr = cfg.lr
+            if epoch < warmup_epochs:
+                warmup_factor = (epoch + 1) / warmup_epochs
+                current_lr = warmup_lr + (lr - warmup_lr) * warmup_factor
+                for pg in optimizer.param_groups:
+                    pg["lr"] = current_lr
+
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
 
@@ -246,10 +257,11 @@ def training_loop(
         val_accuracies.append(accuracy_val_pct)
 
         if scheduler is not None:
-            if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
-                scheduler.step(avg_loss_val)
-            else:
-                scheduler.step()
+            if not cfg.warmup_lr or epoch >= cfg.warmup_epochs:
+                if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(avg_loss_val)
+                else:
+                    scheduler.step()
 
     emit(
         level="INFO",

@@ -2,4 +2,6 @@ n_fft: 2048
 hop_length: 512
 n_mels: 128
 n_mfcc: 40
+normalize_mfcc: false
 include_deltas: true
+stack_deltas_as_channels: true

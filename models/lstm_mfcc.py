@@ -23,6 +23,12 @@ class MFCC_LSTM(nn.Module):
         self.classifier.append(nn.Linear(fc_input_size, cfg.num_classes))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # stacked-as-channels case
+        if x.ndim == 4:
+            # (batch, 3, 40, T) → (batch, 120, T)
+            batch, channels, coeffs, time = x.shape
+            x = x.reshape(batch, channels * coeffs, time)
+
         # Expected shape is (batch_size, input_size, time_steps).
         if x.ndim != 3 or x.shape[1] != self.input_size:
             msg = (

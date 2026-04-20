@@ -35,9 +35,16 @@ def _compute_features_esc50(
     mel_spec = lbr.power_to_db(mel_spec)
 
     mfcc = lbr.feature.mfcc(S=mel_spec, n_mfcc=cfg.n_mfcc)
+    if cfg.normalize_mfcc:
+        mfcc = (mfcc - mfcc.mean(axis=1, keepdims=True)) / (
+            mfcc.std(axis=1, keepdims=True) + 1e-8
+        )
     if cfg.include_deltas:
         mfcc_delta = lbr.feature.delta(mfcc)
         mfcc_delta2 = lbr.feature.delta(mfcc_delta)
-        mfcc = np.vstack((mfcc, mfcc_delta, mfcc_delta2))
+        if not cfg.stack_deltas_as_channels:
+            mfcc = np.vstack((mfcc, mfcc_delta, mfcc_delta2))
+        else:
+            mfcc = np.stack([mfcc, mfcc_delta, mfcc_delta2], axis=0)
 
     return mel_spec, mfcc
