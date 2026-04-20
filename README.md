@@ -9,8 +9,16 @@ Requires Python 3.12.* and [uv](https://docs.astral.sh/uv/) (`pip install uv`).
 ```bash
 git clone git@github.com:de-yarp/audio-classification.git
 cd audio-classification
-uv sync
 ```
+
+Then install PyTorch in the variant that matches your machine:
+
+```bash
+uv sync --extra cu128    # NVIDIA GPU with CUDA 12.8+ driver (560+)
+uv sync --extra cpu      # no NVIDIA GPU, or Mac
+```
+
+Pick exactly one — the two extras are mutually exclusive. If you pick the wrong one, remove `.venv/` and `uv.lock`, then re-sync with the right extra. If `--extra cu128` succeeds but `torch.cuda.is_available()` returns `False`, update your NVIDIA driver from [nvidia.com/drivers](https://www.nvidia.com/drivers) and try again.
 
 All commands go through `uv run`. See `docs/team/TEAM_SETUP.md` for full onboarding.
 
