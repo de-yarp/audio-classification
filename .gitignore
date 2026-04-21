@@ -57,4 +57,4 @@ data/
 
 # Переконайся, що ці папки ігноруються
 runs/artifacts/
-runs/configs/
+runs/configs/EXPERIMENTS_LOG.md
