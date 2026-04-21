@@ -8,6 +8,7 @@ import torch
 import yaml
 
 from infra.artifacts import (
+    compute_confusion_matrix,
     save_accuracy_curve,
     save_classification_report,
     save_confusion_matrix,
@@ -21,6 +22,7 @@ from .data_models import (
     MODEL_CHECKPOINTS_DIR_PATH,
     MODEL_CONFIGS_DIR_PATH,
     ArgsCLI,
+    CMInfo,
     ConfigCNN,
     ConfigLSTM,
     ModelType,
@@ -189,6 +191,7 @@ def save_train_run_info(
     *,
     args: ArgsCLI,
     train_info_for_plots: dict,
+    cm_info: CMInfo,
     emit: Callable[[str, str, str, dict], None],
     artifacts_dir: Path = MODEL_ARTIFACTS_DIR_PATH / "train",
     cv_run_id: str | None = None,
@@ -235,6 +238,41 @@ def save_train_run_info(
     )
     accuracy_curve_path_png = save_accuracy_curve(
         train_info_for_plots["val_accuracies"], run_id, output_dir, emit=emit
+    )
+
+    all_preds = cm_info["preds"]
+    all_labels = cm_info["labels"]
+    class_names = cm_info["class_names"]
+
+    cm_full = compute_confusion_matrix(all_preds, all_labels, normalize="true")
+    cm_category = compute_confusion_matrix(all_preds, all_labels, category_level=True)
+
+    category_names = ["Animals", "Natural", "Human", "Interior", "Exterior"]
+
+    save_confusion_matrix(
+        preds=all_preds,
+        labels=all_labels,
+        run_id=run_id,
+        output_dir=output_dir,
+        class_names=class_names,
+        emit=emit,
+        precomputed_cm=cm_full,
+        custom_stem="confusion_matrix_full",
+    )
+
+    save_confusion_matrix(
+        preds=all_preds,
+        labels=all_labels,
+        run_id=run_id,
+        output_dir=output_dir,
+        class_names=category_names,
+        emit=emit,
+        precomputed_cm=cm_category,
+        custom_stem="confusion_matrix_category",
+    )
+
+    save_classification_report(
+        all_preds, all_labels, run_id, output_dir, class_names, emit=emit
     )
 
     content_updated["loss_curve_path_png"] = loss_curve_path_png

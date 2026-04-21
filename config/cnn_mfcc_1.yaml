@@ -44,8 +44,8 @@ model:
 
 run:
   seed: 123
-  folds_train: [1, 2, 3]
-  folds_val: [4]
+  folds_train: [1, 2, 3, 4]
+  folds_val: [5]
   batch_size: 32
   num_epochs: 100
 
