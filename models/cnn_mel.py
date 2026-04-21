@@ -56,7 +56,10 @@ class MEL_CNN(nn.Module):
                 )
                 h, w = self._calculate_size(h, w, layer.kernel_size, layer.stride, layer.padding)
 
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        if cfg.global_avg_pool is not None:
+            self.global_avg_pool = nn.AdaptiveAvgPool2d(tuple(cfg.global_avg_pool))
+        else:
+            self.global_avg_pool = None
         fc_input_size = current_channels
 
         for fc_size in cfg.fc_layers:
@@ -84,7 +87,8 @@ class MEL_CNN(nn.Module):
             else:
                 x = self.activation_fn(layer(x))
 
-        x = self.global_avg_pool(x)
+        if self.global_avg_pool is not None:
+            x = self.global_avg_pool(x)
         x = torch.flatten(x, 1)
         x = F.dropout(x, p=self.dropout, training=self.training)
 
