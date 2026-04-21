@@ -44,3 +44,17 @@ Desktop.ini
 runs/
 checkpoints/
 wandb/
+# ... (твої існуючі налаштування) ...
+
+# Додай ці рядки обов'язково:
+*.zip
+data/
+
+# Зміни секцію з CSV, щоб трекер завантажився:
+# Ми ігноруємо всі CSV, крім нашого головного трекера
+*.csv
+!runs/cnn_mel_train_tracker.csv
+
+# Переконайся, що ці папки ігноруються
+runs/artifacts/
+runs/configs/

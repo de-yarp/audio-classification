@@ -1,5 +1,5 @@
 from typing import Callable
-
+from sklearn.metrics import precision_recall_fscore_support
 import numpy as np
 import torch
 import torch.nn as nn
@@ -82,4 +82,23 @@ def evaluate_model(
         "accuracy_pct": round(accuracy_pct, 4),
     }
 
+    # В кінці функції evaluate_model, перед поверненням значень:
+    all_preds_np = torch.cat(all_preds).cpu().numpy()
+    all_labels_np = torch.cat(all_labels).cpu().numpy()
+
+    # Обчислюємо Precision, Recall та F1
+    p, r, f1, _ = precision_recall_fscore_support(all_labels_np, all_preds_np, average='macro', zero_division=0)
+
+    emit(
+        level="INFO",
+        component=COMPONENT,
+        event="finish_eval",
+        payload={
+            "avg_loss": round(eval_loss / len(eval_loader), 4),
+            "accuracy_pct": round((correct / total) * 100, 4),
+            "precision_macro": round(p * 100, 4),
+            "recall_macro": round(r * 100, 4),
+            "f1_macro": round(f1 * 100, 4),
+        },
+    )
     return all_preds_flat, all_labels_flat, eval_ds.class_names, content

@@ -1,0 +1,78 @@
+#74.5%
+model:
+  model_type: "cnn"
+  repr_type: "mel"
+  global_avg_pool: [1, 1]
+  mfcc_deltas: false
+  stack_deltas_as_channels: false
+  conv_layers:
+    - type: "conv"
+      kernel_count: 64      
+      kernel_size: [5, 5]   
+      stride: 1
+      padding: 2            
+      batch_norm: True
+    - type: "pool"
+      kernel_size: [2, 2]
+      stride: [2, 2]
+      padding: 0
+    - type: "conv"
+      kernel_count: 128     
+      kernel_size: [3, 3]
+      stride: 1
+      padding: 1
+      batch_norm: True
+    - type: "pool"
+      kernel_size: [2, 2]
+      stride: [2, 2]
+      padding: 0
+    - type: "conv"
+      kernel_count: 256
+      kernel_size: [3, 3]
+      stride: 1
+      padding: 1
+      batch_norm: True
+    - type: "pool"
+      kernel_size: [2, 2]
+      stride: [2, 2]
+      padding: 0
+    - type: "conv"
+      kernel_count: 512     
+      kernel_size: [3, 3]
+      stride: 1
+      padding: 1
+      batch_norm: True
+    - type: "pool"
+      kernel_size: [2, 2]
+      stride: [2, 2]
+      padding: 0
+  pool_type: "max"
+  fc_layers:
+    - 1024                 
+    - 512
+  dropout: 0.5
+  num_classes: 50
+
+run:
+  seed: 42
+  folds_train: [1, 2, 3]
+  folds_val: [4]
+  batch_size: 32
+  num_epochs: 150         
+  optimizer: "ADAMW"      
+  lr: 0.001
+  momentum: null
+  weight_decay: 0.001     
+  scheduler: "cosine"     
+  factor: null            
+  patience: null          
+  min_lr: 0.00001
+  step_size: null
+  warmup_lr: True
+  warmup_epochs: 10       
+  warmup_lr_val: 0.00005
+  augment: true
+  freq_masks: 3           
+  freq_mask_width: 20     
+  time_masks: 2          
+  time_mask_width: 30
