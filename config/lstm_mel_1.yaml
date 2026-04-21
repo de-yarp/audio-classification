@@ -1,0 +1,41 @@
+model:
+  model_type: "lstm"
+  repr_type: "mel"
+  mfcc_deltas: False
+  hidden_size: 512
+  num_layers: 2
+  dropout: 0.5
+  fc_layers:
+    - 128
+  num_classes: 50
+
+run:
+  seed: 42
+  folds_train:
+    - 1
+    - 2
+    - 3
+  folds_val:
+    - 4
+  batch_size: 16  
+  num_epochs: 30
+  optimizer: "ADAM"
+  lr: 0.0005
+  momentum: null
+  weight_decay: 0.001
+
+  scheduler: "cosine"
+  factor: 0.1
+  patience: 10
+  min_lr: 0.000001
+  step_size: null
+
+  warmup_lr: False
+  warmup_epochs: null
+  warmup_lr_val: null
+
+  augment: true
+  freq_masks: 2        
+  freq_mask_width: 10
+  time_masks: 2
+  time_mask_width: 40
