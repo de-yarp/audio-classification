@@ -11,6 +11,7 @@ from infra.data_models import (
     SCHEDULER_MAP,
     ArgsCLI,
     AudioDataset,
+    CMInfo,
     ConfigCNN,
     ConfigLSTM,
     DatasetType,
@@ -124,13 +125,17 @@ def _setup_model(
 def run_validation(
     net: nn.Module,
     val_loader: DataLoader,
+    class_names: list[str],
     criterion: nn.CrossEntropyLoss,
     current_lr: float,
     device: torch.device,
     emit: Callable[[str, str, str, dict], None],
-) -> tuple[float, float]:
+) -> tuple[float, float, CMInfo]:
     net.eval()
     val_loss = 0.0
+
+    all_preds: list[torch.Tensor] = []
+    all_labels: list[torch.Tensor] = []
 
     correct = 0
     total = 0
@@ -142,6 +147,9 @@ def run_validation(
             outputs = net(inputs)
             predicted = torch.argmax(outputs, 1)
 
+            all_preds.append(predicted)
+            all_labels.append(labels)
+
             loss = criterion(outputs, labels)
             val_loss += loss.item()
             total += labels.size(0)
@@ -149,6 +157,9 @@ def run_validation(
 
     accuracy_pct = (correct / total) * 100
     avg_loss = val_loss / len(val_loader)
+
+    all_preds_flat = torch.cat(all_preds).to(device="cpu").numpy()
+    all_labels_flat = torch.cat(all_labels).to(device="cpu").numpy()
 
     emit(
         level="INFO",
@@ -161,7 +172,13 @@ def run_validation(
         },
     )
 
-    return avg_loss, accuracy_pct
+    cm_info: CMInfo = {
+        "preds": all_preds_flat,
+        "labels": all_labels_flat,
+        "class_names": class_names,
+    }
+
+    return avg_loss, accuracy_pct, cm_info
 
 
 def training_loop(
@@ -171,7 +188,7 @@ def training_loop(
     run_id: str,
     cv_run_id: str | None = None,
     args: ArgsCLI,
-) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict, dict]:
+) -> tuple[nn.Module, ConfigCNN | ConfigLSTM, dict, dict, CMInfo]:
 
     emit(
         level="INFO",
@@ -205,6 +222,8 @@ def training_loop(
     train_losses = []
     val_losses = []
     val_accuracies = []
+    last_val_info_for_cms: CMInfo | None = None
+
     for epoch in range(cfg.num_epochs):
         running_loss = 0.0
 
@@ -248,9 +267,18 @@ def training_loop(
 
         avg_loss_last_train_epoch = running_loss / len(train_loader)
 
-        avg_loss_val, accuracy_val_pct = run_validation(
-            net, val_loader, criterion, optimizer.param_groups[0]["lr"], device, emit
+        avg_loss_val, accuracy_val_pct, cm_info = run_validation(
+            net,
+            val_loader,
+            val_ds.class_names,
+            criterion,
+            optimizer.param_groups[0]["lr"],
+            device,
+            emit,
         )
+
+        if epoch == cfg.num_epochs - 1:
+            last_val_info_for_cms = cm_info
 
         train_losses.append(avg_loss_last_train_epoch)
         val_losses.append(avg_loss_val)
@@ -292,4 +320,5 @@ def training_loop(
             "val_losses": val_losses,
             "val_accuracies": val_accuracies,
         },
+        last_val_info_for_cms,
     )
