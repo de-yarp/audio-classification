@@ -84,7 +84,7 @@ class LayerConv:
     kernel_count: int
     kernel_size: int | list[int]
     stride: int
-    padding: int
+    padding: int | list[int]
     batch_norm: bool = False
     type: str = "conv"
 

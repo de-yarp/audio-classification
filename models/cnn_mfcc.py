@@ -99,7 +99,7 @@ class MFCC_CNN(nn.Module):
         out_channels: int,
         kernel_size: int | tuple[int, int],
         stride: int | tuple[int, int],
-        padding: int,
+        padding: int | tuple[int, int],
         width: int,
         height: int,
     ):
@@ -107,8 +107,9 @@ class MFCC_CNN(nn.Module):
             (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         )
         sH, sW = (stride, stride) if isinstance(stride, int) else stride
-        new_height = floor((height - kH + 2 * padding) / sH) + 1
-        new_width = floor((width - kW + 2 * padding) / sW) + 1
+        pH, pW = (padding, padding) if isinstance(padding, int) else padding
+        new_height = floor((height - kH + 2 * pH) / sH) + 1
+        new_width = floor((width - kW + 2 * pW) / sW) + 1
         return (out_channels, new_height, new_width)
 
     def forward(self, x: torch.Tensor):
