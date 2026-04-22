@@ -246,6 +246,8 @@ class ConfigLSTM:
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
+    bidirectional: bool = False
+    pooling: str = "last"
 
     @classmethod
     def from_dict(cls, input: dict):
@@ -264,6 +266,8 @@ class ConfigLSTM:
             "dropout",
             "fc_layers",
             "num_classes",
+            "bidirectional",
+            "pooling",
         }
         run_keys = {
             "seed",

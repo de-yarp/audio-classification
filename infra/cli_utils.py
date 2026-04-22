@@ -1,3 +1,4 @@
+import dataclasses
 import random
 from dataclasses import fields
 from pathlib import Path
@@ -91,6 +92,12 @@ def _validate_cfg_folds(cfg: dict, path: Path) -> None:
     )
 
 
+_LSTM_OPTIONAL_FIELDS: dict[str, object] = {
+    "bidirectional": False,
+    "pooling": "last",
+}
+
+
 def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
     model_type_str = cfg["model_type"].strip().lower()
     repr_type_str = cfg["repr_type"].strip().lower()
@@ -135,6 +142,13 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
             raise ValueError(msg) from e
         cfg["pool_type"] = pool_type
 
+    if model_type == ModelType.LSTM:
+        _valid_pooling = {"last", "mean", "max"}
+        pooling_val = cfg.get("pooling", _LSTM_OPTIONAL_FIELDS["pooling"])
+        if pooling_val not in _valid_pooling:
+            msg = f"invalid model.pooling '{pooling_val}' in config {path}, expected {sorted(_valid_pooling)}"
+            raise ValueError(msg)
+
     cfg["model_type"] = model_type
     cfg["repr_type"] = repr_type
     cfg["optimizer"] = optimizer_type
@@ -149,6 +163,9 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
         k_type = cfg_class_types[key]
 
         if key not in cfg:
+            if key in _LSTM_OPTIONAL_FIELDS:
+                cfg[key] = _LSTM_OPTIONAL_FIELDS[key]
+                continue
             raise KeyError(f"missing key {path.stem}.[model/run].{key}")
         val = cfg[key]
 
