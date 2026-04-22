@@ -1,35 +1,35 @@
 model:
-  model_type: "lstm"
-  repr_type: "mfcc"
-  mfcc_deltas: True
-  hidden_size: 128
+  model_type: lstm
+  repr_type: mfcc
+  mfcc_deltas: true
+  hidden_size: 256
   num_layers: 2
-  dropout: 0.3
+  dropout: 0.45
+  bidirectional: true
+  pooling: mean
   fc_layers:
+    - 256
     - 128
   num_classes: 50
 
+
 run:
   seed: 42
-  folds_train:
-    - 1
-    - 2
-    - 3
-  folds_val:
-    - 4
+  folds_train: [2, 3, 4]
+  folds_val: [1]
   batch_size: 32
-  num_epochs: 2
-  optimizer: "SGD"
+  num_epochs: 80
+  optimizer: ADAM
   lr: 0.001
   momentum: null
-  weight_decay: 0.0
+  weight_decay: 1.0e-4
 
-  scheduler: "plateau"
-  factor: 0.1
-  patience: 5
-  min_lr: 0.000001
+  scheduler: PLATEAU
+  factor: 0.5
+  patience: 7
+  min_lr: 1.0e-6
   step_size: null
-
+  
   warmup_lr: False
   warmup_epochs: null
   warmup_lr_val: null

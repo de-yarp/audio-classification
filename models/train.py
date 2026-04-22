@@ -199,6 +199,14 @@ def training_loop(
 
     net, cfg, device = _setup_model(cfg_dict)
 
+    if isinstance(cfg, ConfigLSTM):
+        emit(
+            level="INFO",
+            component=COMPONENT,
+            event="model_init",
+            payload={"bidirectional": cfg.bidirectional, "pooling": cfg.pooling},
+        )
+
     criterion = nn.CrossEntropyLoss()
     optimizer = _setup_optimizer(net, cfg, args.cfg_path)
     scheduler = _setup_scheduler(optimizer, cfg, args.cfg_path)
