@@ -66,7 +66,7 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
                 content, run_id, args=args, cv_train_info=cv_train_info, emit=emit
             )
         else:
-            net, cfg, content, train_info_for_plots = training_loop(
+            net, cfg, content, train_info_for_plots, cm_info = training_loop(
                 cfg_dict_norm, emit=emit, run_id=run_id, args=args
             )
             save_train_run_info(
@@ -76,6 +76,7 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
                 run_id,
                 args=args,
                 train_info_for_plots=train_info_for_plots,
+                cm_info=cm_info,
                 emit=emit,
             )
     elif pipe_type == "eval":

@@ -10,6 +10,19 @@ from sklearn.metrics import classification_report, confusion_matrix
 COMPONENT = __name__
 
 
+def compute_confusion_matrix(
+    preds: np.ndarray,
+    labels: np.ndarray,
+    *,
+    normalize: str | None = None,
+    category_level: bool = False,
+) -> np.ndarray:
+    if category_level:
+        labels = labels // 10
+        preds = preds // 10
+    return confusion_matrix(labels, preds, normalize=normalize)
+
+
 def save_confusion_matrix(
     preds: np.ndarray,
     labels: np.ndarray,
@@ -18,9 +31,21 @@ def save_confusion_matrix(
     class_names: list[str] | None = None,
     *,
     emit: Callable[[str, str, str, dict], None],
+    precomputed_cm: np.ndarray | None = None,
+    custom_stem: str | None = None,
 ) -> tuple[Path, Path]:
-    cm = confusion_matrix(labels, preds)
-    npy_path = output_dir / "confusion_matrix.npy"
+
+    if precomputed_cm is None:
+        cm = confusion_matrix(labels, preds)
+    else:
+        cm = precomputed_cm
+
+    if custom_stem is None:
+        file_stem = "confusion_matrix"
+    else:
+        file_stem = custom_stem
+
+    npy_path = output_dir / (file_stem + ".npy")
     np.save(npy_path, cm)
 
     emit(
@@ -30,11 +55,14 @@ def save_confusion_matrix(
         payload={"artifact_path": str(npy_path)},
     )
 
+    fmt = "d" if cm.dtype.kind == "i" else ".2f"
+    annot = cm.shape[0] <= 10  # annotate only small matrices
+
     fig, ax = plt.subplots(figsize=(20, 18))
     sns.heatmap(
         cm,
-        annot=True,
-        fmt="d",
+        annot=annot,
+        fmt=fmt if annot else "",
         cmap="Blues",
         xticklabels=class_names or range(cm.shape[1]),
         yticklabels=class_names or range(cm.shape[0]),
@@ -45,7 +73,7 @@ def save_confusion_matrix(
     ax.set_title(f"Confusion Matrix — {run_id}")
     plt.tight_layout()
 
-    png_path = output_dir / "confusion_matrix.png"
+    png_path = output_dir / (file_stem + ".png")
     fig.savefig(png_path, dpi=150)
     plt.close(fig)
 

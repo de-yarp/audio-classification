@@ -84,7 +84,7 @@ class LayerConv:
     kernel_count: int
     kernel_size: int | list[int]
     stride: int
-    padding: int
+    padding: int | list[int]
     batch_norm: bool = False
     type: str = "conv"
 
@@ -246,6 +246,8 @@ class ConfigLSTM:
 
     # in_channels switch for mfcc
     mfcc_deltas: bool = True
+    bidirectional: bool = False
+    pooling: str = "last"
 
     @classmethod
     def from_dict(cls, input: dict):
@@ -264,6 +266,8 @@ class ConfigLSTM:
             "dropout",
             "fc_layers",
             "num_classes",
+            "bidirectional",
+            "pooling",
         }
         run_keys = {
             "seed",
@@ -480,6 +484,12 @@ class ArgsCLI:
     eval_folds: list[int] | None = None
 
 
+class CMInfo(TypedDict):
+    preds: np.ndarray
+    labels: np.ndarray
+    class_names: list[str]
+
+
 class TrainRunInfo(TypedDict):
     net: nn.Module
     cfg_instance: ConfigCNN | ConfigLSTM
@@ -489,6 +499,7 @@ class TrainRunInfo(TypedDict):
     train_info_for_plots: dict
     emit: Callable[[str, str, str, dict], None]
     cv_run_id: str | None
+    cm_info: CMInfo
 
 
 class CLIArgumentError(Exception):

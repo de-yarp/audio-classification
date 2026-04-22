@@ -57,7 +57,7 @@ def cross_validation_loop(
         cfg_dict_child["folds_train"] = folds_train
         cfg_dict_child["folds_val"] = folds_val
 
-        net, cfg, content, train_info_for_plots = training_loop(
+        net, cfg, content, train_info_for_plots, cm_info = training_loop(
             cfg_dict_child,
             emit=emit_child,
             run_id=run_id_child,
@@ -74,21 +74,11 @@ def cross_validation_loop(
             "cv_run_id": cv_run_id,
             "train_info_for_plots": train_info_for_plots,
             "emit": emit_child,
+            "cm_info": cm_info,
         }
         train_runs.append(save_params)
 
         cv_train_info.append(train_info_for_plots)
-
-        # save_train_run_info(
-        #     net,
-        #     cfg,
-        #     content,
-        #     run_id_child,
-        #     args=args,
-        #     cv_run_id=cv_run_id,
-        #     train_info_for_plots=train_info_for_plots,
-        #     emit=emit_child,
-        # )
 
     emit(
         level="INFO",
