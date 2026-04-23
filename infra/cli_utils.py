@@ -143,7 +143,7 @@ def normalize_and_validate_config(cfg: dict, path: Path) -> dict:
         cfg["pool_type"] = pool_type
 
     if model_type == ModelType.LSTM:
-        _valid_pooling = {"last", "mean", "max"}
+        _valid_pooling = {"last", "mean", "max", "mean_max"}
         pooling_val = cfg.get("pooling", _LSTM_OPTIONAL_FIELDS["pooling"])
         if pooling_val not in _valid_pooling:
             msg = f"invalid model.pooling '{pooling_val}' in config {path}, expected {sorted(_valid_pooling)}"
