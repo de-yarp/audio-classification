@@ -1,6 +1,8 @@
 # Audio Classification
 
-University project comparing CNN and LSTM architectures on environmental sound classification using the [ESC-50](https://github.com/karolpiczak/ESC-50) dataset. Each architecture is trained on two audio representations — log-mel spectrogram and MFCC — giving four experiments total. Each team member owns one experiment end-to-end.
+University research project comparing CNN and LSTM architectures on environmental sound classification using the [ESC-50](https://github.com/karolpiczak/ESC-50) dataset. Each architecture is trained on two audio representations — log-mel spectrogram and MFCC — giving four experiments in total. Each team member owns one experiment end-to-end. Results and methodology are documented in `docs/report/`.
+
+The configs currently in `config/` are the final configurations used to produce the results reported in the paper. Each config represents the best-performing hyperparameter set found during experimentation for that model.
 
 ## Quick Start
 
@@ -20,7 +22,7 @@ uv sync --extra cpu      # no NVIDIA GPU, or Mac
 
 Pick exactly one — the two extras are mutually exclusive. If you pick the wrong one, remove `.venv/` and `uv.lock`, then re-sync with the right extra. If `--extra cu128` succeeds but `torch.cuda.is_available()` returns `False`, update your NVIDIA driver from [nvidia.com/drivers](https://www.nvidia.com/drivers) and try again.
 
-All commands go through `uv run`. See `docs/team/TEAM_SETUP.md` for full onboarding.
+All commands go through `uv run`.
 
 ### Data Setup
 
@@ -33,25 +35,39 @@ uv run python -c "from infra.preprocessing import get_features_esc50; get_featur
 
 This reads `config/features.yaml` and writes `.npy` files to `data/processed/esc50/mel/` and `data/processed/esc50/mfcc/`. Only needs to run once — it will refuse to overwrite existing files.
 
+### Tracker CSVs
+
+**Before running any training or evaluation, you must create your tracker CSV files manually.** The pipeline will not create them — it appends to existing files only and will error if the file is missing.
+
+Create the following empty files (rename to match your experiment):
+
+```bash
+touch runs/your_model_train_tracker.csv
+touch runs/your_model_eval_tracker.csv
+touch runs/your_model_cross_val_tracker.csv
+```
+
+See the [Tracker CSVs](#tracker-csvs) section for the expected column schema.
+
 ### Training
 
 ```bash
-uv run audio-clf train <config_path> <csv_path> [--save_model] [--cross-val <cv_csv_path>]
+uv run audio-clf train <config_path> <csv_path> [--save-model] [--cross-val <cv_csv_path>]
 ```
 
 **Quick run** (single train/val split):
 
 ```bash
-uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save_model
+uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save-model
 ```
 
 **Cross-validation** (rotates validation fold across all train+val folds):
 
 ```bash
-uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save_model --cross-val runs/cnn_mfcc_cross_val_tracker.csv
+uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save-model --cross-val runs/cnn_mfcc_cross_val_tracker.csv
 ```
 
-With `--cross-val`, the pipeline generates all combinations of validation folds from the folds listed in `folds_train` + `folds_val` in the config. For example, with `folds_train: [1, 2, 3]` and `folds_val: [4]` (val size = 1), this produces 4 runs — each using a different single fold for validation and the remaining 3 for training. The seed is reset before each fold run for reproducibility.
+With `--cross-val`, the pipeline generates all combinations of validation folds from the folds listed in `folds_train` + `folds_val` in the config. For example, with `folds_train: [1, 2, 3, 4]` and `folds_val: [5]` (val size = 1), this produces 5 runs — each using a different single fold for validation and the remaining 4 for training. The seed is reset before each fold run for reproducibility.
 
 Quick runs save artifacts to `runs/artifacts/train/quick/<run_id>/`. Cross-validation runs save per-fold artifacts to `runs/artifacts/train/cv/<cv_run_id>/<child_run_id>/`, with aggregated CV curves (mean ± std) saved to `runs/artifacts/train/cv/<cv_run_id>/`. Each fold run is also logged as a separate row in the train tracker CSV.
 
@@ -85,8 +101,10 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 ```
 .
 ├── config/
-│   ├── cnn_mfcc_1.yaml              # experiment config (architecture + training params)
-│   ├── lstm_mfcc_1.yaml             # LSTM experiment config
+│   ├── cnn_mfcc_1.yaml              # CNN + MFCC experiment config
+│   ├── cnn_mel_4.yaml               # CNN + log-mel experiment config
+│   ├── lstm_mfcc_1.yaml             # LSTM + MFCC experiment config
+│   ├── lstm_mel_1.yaml              # LSTM + log-mel experiment config
 │   └── features.yaml                # feature extraction params (n_fft, hop_length, etc.)
 │
 ├── data/
@@ -109,9 +127,9 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 │
 ├── models/
 │   ├── cnn_mfcc.py                   # MFCC_CNN: dynamic conv/pool/FC via ModuleList
-│   ├── cnn_mel.py                    # MEL_CNN (placeholder)
+│   ├── cnn_mel.py                    # MEL_CNN: dynamic conv/pool/FC via ModuleList
 │   ├── lstm_mfcc.py                  # MFCC_LSTM: LSTM + dynamic FC head
-│   ├── lstm_mel.py                   # MEL_LSTM (placeholder)
+│   ├── lstm_mel.py                   # MEL_LSTM: LSTM + LayerNorm + BN FC head (see note below)
 │   ├── cross_val.py                  # cross-validation loop, fold combination generation
 │   ├── train.py                      # training loop, validation, model/optimizer setup
 │   └── eval.py                       # evaluation loop (inference, preds/labels collection)
@@ -135,16 +153,14 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 │
 ├── tests/
 │   ├── test_preprocessing.py
-│   └── test_dataset_class.py
+│   ├── test_dataset_class.py
+│   └── test_lstm_mfcc.py
 │
 ├── logs/
 │   └── log.jsonl                     # structured JSON logs (all runs)
 │
 ├── docs/
-│   ├── team/
-│   │   ├── GIT_GUIDE.md              # branching, commits, merge workflow
-│   │   └── TEAM_SETUP.md             # environment setup for new members
-│   └── report/                       # final report (TBD)
+│   └── report/                       # final university report
 │
 ├── .gitignore
 ├── pyproject.toml
@@ -169,39 +185,75 @@ stack_deltas_as_channels: true # true → (3, 40, T) channel-stacked; false → 
 
 ## Config Format
 
-Experiment configs live in `config/` and have two sections:
+Experiment configs live in `config/` and have two sections: `model:` and `run:`. The `run:` section is identical across all four model types. The `model:` section differs per architecture.
+
+### CNN (MFCC and log-mel)
 
 ```yaml
 model:
   model_type: "cnn"                # cnn | lstm
   repr_type: "mfcc"                # mfcc | mel
-  mfcc_deltas: true                # true → include delta features, false → static only
+  mfcc_deltas: true                # true → include delta features; false → static only
   stack_deltas_as_channels: true   # true → input shape (3, 40, T); false → (120, T)
                                    # must match stack_deltas_as_channels in features.yaml
-  conv_layers:                     # list of conv/pool layers (CNN only)
+                                   # not used when repr_type is mel
+  conv_layers:                     # list of conv/pool layers built dynamically via ModuleList
     - type: "conv"
       kernel_count: 32
       kernel_size: [3, 5]          # int for symmetric, [height, width] for asymmetric
       stride: 1                    # int or [height, width]
-      padding: 0
+      padding: 0                   # int for symmetric, [height, width] for asymmetric
       batch_norm: true
     - type: "pool"
-      kernel_size: [1, 2]          # int for symmetric, [height, width] for asymmetric
-      stride: [1, 2]               # int or [height, width]
+      kernel_size: [1, 2]
+      stride: [1, 2]
       padding: 0
   pool_type: "max"                 # max | avg (applies to all pool layers)
   fc_layers: [512, 128]            # FC layer sizes (final → num_classes added automatically)
-  dropout: 0.5                     # dropout rate between FC layers (0.0 = disabled)
+  dropout: 0.5                     # dropout rate applied before first FC and between FC layers
   num_classes: 50
-  global_avg_pool: null            # [h, w] to apply global avg pool before FC, null to disable
+  global_avg_pool: null            # [h, w] to apply AdaptiveAvgPool2d before FC, null to disable
+                                   # when set, FC input size = channels only (spatial dims collapsed)
+                                   # when null, FC input size = channels × height × width
+```
 
+The CNN architecture is fully dynamic — conv/pool layers are built from the config list, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer. Both `kernel_size`, `stride`, and `padding` accept either a single integer (symmetric) or a `[height, width]` list (asymmetric).
+
+### LSTM (MFCC and log-mel)
+
+```yaml
+model:
+  model_type: "lstm"
+  repr_type: "mfcc"                # mfcc | mel
+  mfcc_deltas: true                # true → 120-dimensional input; false → 40-dimensional
+  hidden_size: 256                 # LSTM hidden state size per direction
+  num_layers: 2                    # number of stacked LSTM layers
+  dropout: 0.3                     # dropout between stacked LSTM layers (0.0 = disabled)
+                                   # PyTorch built-in LSTM dropout, not applied to FC layers
+  bidirectional: true              # true → bidirectional LSTM; FC input size doubles
+  pooling: "mean"                  # how to reduce LSTM output over time dimension:
+                                   #   last     → final hidden state
+                                   #   mean     → mean over all timesteps
+                                   #   max      → max over all timesteps
+                                   #   mean_max → concat of mean and max (doubles FC input size)
+  fc_layers: [256, 128]            # FC layer sizes after LSTM output
+  num_classes: 50
+```
+
+The LSTM takes the LSTM output reduced by the chosen pooling strategy and passes it through the FC classifier head. `dropout` applies between stacked LSTM layers (PyTorch's built-in LSTM dropout), not between FC layers. Channel-stacked MFCC inputs `(3, n_mfcc, T)` are automatically reshaped to `(n_mfcc*3, T)` in the forward pass — the LSTM sees the same 120-dimensional feature vector per timestep regardless of stacking mode.
+
+**Known limitation (MEL_LSTM):** `MEL_LSTM` in `models/lstm_mel.py` has two hardcoded assumptions not driven by config: the input size is hardcoded to 128 (n_mels from `features.yaml` is not passed through the config dataclass), and the forward pass applies a double transpose to handle input orientation. Both assumptions hold for the current `features.yaml` configuration (`n_mels: 128`) and are consistent across all runs. Additionally, `MEL_LSTM` applies `LayerNorm` before the FC head and `BatchNorm1d` after each FC layer — these are not configurable and are fixed in the model class.
+
+### Run section (all models)
+
+```yaml
 run:
   seed: 42
-  folds_train: [1, 2, 3]
-  folds_val: [4]
+  folds_train: [1, 2, 3, 4]
+  folds_val: [5]
   batch_size: 32
   num_epochs: 100
-  optimizer: "SGD"                 # SGD | Adam | AdamW
+  optimizer: "SGD"                 # SGD | ADAM | ADAMW
   lr: 0.001
   momentum: 0.9                    # only used with SGD; set null for Adam/AdamW
   weight_decay: 0.01               # L2 regularization, applies to all optimizers
@@ -211,52 +263,30 @@ run:
   warmup_lr_val: 0.00001           # starting LR for warmup; ignored if warmup_lr is false
 
   scheduler: "plateau"             # plateau | cosine | step | null (no scheduling)
-  factor: 0.1                      # LR multiplier on trigger (plateau, step)
+  factor: 0.1                      # LR multiplier on trigger (plateau, step); null for cosine
   patience: 5                      # epochs without improvement before LR reduction (plateau only)
-  min_lr: 0.000001                 # LR floor (plateau, cosine, step)
+  min_lr: 0.000001                 # LR floor (plateau, cosine)
   step_size: null                  # reduce LR every N epochs (step only)
 
   augment: true                    # enable SpecAugment data augmentation (training only)
-  freq_masks: 0                    # number of frequency masks (set 0 for MFCC — cepstral axis is not frequency)
+  freq_masks: 0                    # number of frequency masks
+                                   # set 0 for MFCC — cepstral coefficient axis is not a frequency axis
   freq_mask_width: 10              # max frequency mask width in bins
   time_masks: 2                    # number of time masks
   time_mask_width: 25              # max time mask width in frames
 ```
 
-The CNN architecture is fully dynamic — conv/pool layers are built from the config list using `nn.ModuleList`, and the first FC layer's input size is auto-computed from the spatial dimensions after all conv/pool operations. Batch normalization is optional per conv layer. Both `kernel_size` and `stride` accept either a single integer (symmetric) or a `[height, width]` list (asymmetric).
-
 **LR warmup** is optional. When `warmup_lr: true`, the training loop linearly ramps the learning rate from `warmup_lr_val` to `lr` over `warmup_epochs` epochs before handing off to the scheduler. The scheduler does not step during the warmup phase. Warmup applies per fold in cross-validation. Set `warmup_lr: false` to disable — `warmup_epochs` and `warmup_lr_val` are ignored in that case.
 
-**Learning rate scheduling** is optional. When `scheduler` is set, the specified PyTorch scheduler adjusts the learning rate during training. `plateau` (ReduceLROnPlateau) watches validation loss and reduces LR when improvement stalls. `cosine` (CosineAnnealingLR) smoothly decays LR from the initial value to `min_lr` over all epochs. `step` (StepLR) multiplies LR by `factor` every `step_size` epochs. Each type only uses its relevant parameters — unused fields are ignored. The current learning rate is logged per epoch alongside validation metrics.
+**Learning rate scheduling** is optional. `plateau` (ReduceLROnPlateau) watches validation loss and reduces LR when improvement stalls. `cosine` (CosineAnnealingLR) smoothly decays LR over all epochs. `step` (StepLR) multiplies LR by `factor` every `step_size` epochs. Each type only uses its relevant parameters — unused fields should be set to `null`.
 
-**Data augmentation** applies frequency and time masking to training samples only — validation and evaluation always see unmodified data. When `augment: true`, each training sample gets random frequency and time masks applied on-the-fly in `__getitem__`. Each mask has a random width (between 1 and the configured max) and a random position within the tensor. For channel-stacked inputs `(3, n_mfcc, T)`, masking correctly targets axis 1 (coefficients) and axis 2 (time), leaving the channel axis untouched. The pipeline validates at dataset creation that the worst-case masking does not exceed 50% of the respective dimension.
+**Data augmentation** applies frequency and time masking to training samples only — validation and evaluation always see unmodified data. When `augment: true`, each training sample gets random masks applied on-the-fly in `__getitem__`. For channel-stacked inputs `(3, n_mfcc, T)`, masking correctly targets axis 1 (coefficients) and axis 2 (time), leaving the channel axis untouched. The pipeline validates at dataset creation that the worst-case masking does not exceed 50% of the respective dimension.
 
-**Note:** Frequency masking is inappropriate for MFCCs — the cepstral coefficient axis is not a frequency axis. Set `freq_masks: 0` for all MFCC experiments.
-
-**Note:** `mfcc_deltas` and `stack_deltas_as_channels` must be manually aligned with `include_deltas` and `stack_deltas_as_channels` in `features.yaml`. There is no automatic link between feature extraction and training.
-
-LSTM config uses the same `run:` section but a different `model:` section:
-
-```yaml
-model:
-  model_type: "lstm"           # cnn | lstm
-  repr_type: "mfcc"            # mfcc | mel
-  mfcc_deltas: true            # true → 120 input size, false → 40
-  hidden_size: 128             # LSTM hidden state size
-  num_layers: 2                # number of stacked LSTM layers
-  dropout: 0.3                 # dropout between LSTM layers (0.0 = disabled)
-  fc_layers: [128]             # FC layer sizes after LSTM output (final → num_classes added automatically)
-  num_classes: 50
-
-run:
-  # same as CNN
-```
-
-The LSTM takes the last hidden state from the final layer and passes it through the FC classifier head. `dropout` in the LSTM config applies between stacked LSTM layers (PyTorch's built-in LSTM dropout), not between FC layers as in the CNN config. Channel-stacked inputs `(3, n_mfcc, T)` are automatically reshaped to `(n_mfcc*3, T)` in the forward pass — the LSTM sees the same 120-dimensional feature vector per timestep regardless of stacking mode, so `stack_deltas_as_channels` has no effect on the LSTM model and does not need to be set in the LSTM config.
+**Note:** `mfcc_deltas` and `stack_deltas_as_channels` in the model config must be manually aligned with `include_deltas` and `stack_deltas_as_channels` in `features.yaml`. There is no automatic link between feature extraction and training.
 
 ## Tracker CSVs
 
-Each team member maintains their own train, eval, and cross-validation tracker CSVs to avoid merge conflicts. These are append-only logs of every run. The template files in `runs/` should be renamed to match your experiment (e.g. `cnn_mfcc_train_tracker.csv`) before use. Keep your CSVs in `runs/` — it's the natural place alongside configs, checkpoints, and artifacts.
+Each team member maintains their own train, eval, and cross-validation tracker CSVs to avoid merge conflicts. These are append-only logs of every run. **The files must be created manually before running any command** — the pipeline appends to existing files and will error if they are missing. Rename to match your experiment (e.g. `cnn_mfcc_train_tracker.csv`) before use.
 
 Train CSV columns: `ts, run_id, avg_loss_last_train_epoch, avg_loss_val, accuracy_val_pct, cfg_path, model_path, loss_curve_path_png, accuracy_curve_path_png, cv_run_id`
 
@@ -271,8 +301,3 @@ Cross-validation CSV columns: `ts, cv_run_id, child_run_ids, mean_accuracy, std_
 ## Logging
 
 All pipeline events are written as JSON lines to `logs/log.jsonl`. Each log entry includes a timestamp, run ID, component name, event type, and optional payload. Logs can be filtered by run ID using `parse_run_logs(run_id)` from `infra.log_utils`.
-
-## Team Docs
-
-- `docs/team/TEAM_SETUP.md` — environment setup, cloning, dependencies
-- `docs/team/GIT_GUIDE.md` — branching strategy, commit conventions, merge rules
