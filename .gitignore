@@ -32,6 +32,7 @@ Desktop.ini
 # Logs
 *.log
 *.jsonl
+*.jsonl.*
 
 # Jupyter
 .ipynb_checkpoints/
