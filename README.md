@@ -71,6 +71,8 @@ With `--cross-val`, the pipeline generates all combinations of validation folds 
 
 Quick runs save artifacts to `runs/artifacts/train/quick/<run_id>/`. Cross-validation runs save per-fold artifacts to `runs/artifacts/train/cv/<cv_run_id>/<child_run_id>/`, with aggregated CV curves (mean ± std) saved to `runs/artifacts/train/cv/<cv_run_id>/`. Each fold run is also logged as a separate row in the train tracker CSV.
 
+Per-fold artifacts include: `loss_curve.png`, `accuracy_curve.png`, `confusion_matrix_full.{npy,png}` (normalized 50×50), `confusion_matrix_category.{npy,png}` (5×5 semantic category aggregate), and `classification_report.json`. No aggregate confusion matrix or classification report is generated at the CV level — only the per-fold artifacts.
+
 Training automatically detects the best available device (CUDA → MPS → CPU).
 
 ### Evaluation
@@ -143,9 +145,13 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 │   │   └── cv/<cv_run_id>/<child_run_id>/  # model .pt per CV fold
 │   ├── artifacts/
 │   │   ├── train/
-│   │   │   ├── quick/<run_id>/       # loss_curve.png, accuracy_curve.png
+│   │   │   ├── quick/<run_id>/       # loss_curve.png, accuracy_curve.png,
+│   │   │   │                         # confusion_matrix_full.{npy,png}, confusion_matrix_category.{npy,png},
+│   │   │   │                         # classification_report.json
 │   │   │   └── cv/<cv_run_id>/       # cv_loss_curve.png, cv_accuracy_curve.png
-│   │   │       └── <child_run_id>/   # per-fold loss_curve.png, accuracy_curve.png
+│   │   │       └── <child_run_id>/   # per-fold: loss_curve.png, accuracy_curve.png,
+│   │   │                             # confusion_matrix_full.{npy,png}, confusion_matrix_category.{npy,png},
+│   │   │                             # classification_report.json
 │   │   └── eval/<run_id>/            # confusion_matrix.{npy,png}, classification_report.json
 │   ├── your_model_train_tracker.csv  # one per person, training runs (quick + CV folds)
 │   ├── your_model_eval_tracker.csv   # one per person, eval runs
