@@ -1,6 +1,6 @@
 # Audio Classification
 
-University research project comparing CNN and LSTM architectures on environmental sound classification using the [ESC-50](https://github.com/karolpiczak/ESC-50) dataset. Each architecture is trained on two audio representations — log-mel spectrogram and MFCC — giving four experiments in total. Each team member owns one experiment end-to-end. Results and methodology are documented in `docs/report/`.
+University research project comparing CNN and LSTM architectures on environmental sound classification using the [ESC-50](https://github.com/karolpiczak/ESC-50) dataset. Each architecture is trained on two audio representations — log-mel spectrogram and MFCC — giving four experiments in total. Results and methodology are documented in `docs/report/`.
 
 The configs currently in `config/` are the final configurations used to produce the results reported in the paper. Each config represents the best-performing hyperparameter set found during experimentation for that model.
 
@@ -39,12 +39,10 @@ This reads `config/features.yaml` and writes `.npy` files to `data/processed/esc
 
 **Before running any training or evaluation, you must create your tracker CSV files manually.** The pipeline will not create them — it appends to existing files only and will error if the file is missing.
 
-Create the following empty files (rename to match your experiment):
-
 ```bash
-touch runs/your_model_train_tracker.csv
-touch runs/your_model_eval_tracker.csv
-touch runs/your_model_cross_val_tracker.csv
+touch runs/train_tracker.csv
+touch runs/eval_tracker.csv
+touch runs/cross_val_tracker.csv
 ```
 
 See the [Tracker CSVs](#tracker-csvs) section for the expected column schema.
@@ -58,13 +56,13 @@ uv run audio-clf train <config_path> <csv_path> [--save-model] [--cross-val <cv_
 **Quick run** (single train/val split):
 
 ```bash
-uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save-model
+uv run audio-clf train config/cnn_mfcc_1.yaml runs/train_tracker.csv --save-model
 ```
 
 **Cross-validation** (rotates validation fold across all train+val folds):
 
 ```bash
-uv run audio-clf train config/cnn_mfcc_1.yaml runs/cnn_mfcc_train_tracker.csv --save-model --cross-val runs/cnn_mfcc_cross_val_tracker.csv
+uv run audio-clf train config/cnn_mfcc_1.yaml runs/train_tracker.csv --save-model --cross-val runs/cross_val_tracker.csv
 ```
 
 With `--cross-val`, the pipeline generates all combinations of validation folds from the folds listed in `folds_train` + `folds_val` in the config. For example, with `folds_train: [1, 2, 3, 4]` and `folds_val: [5]` (val size = 1), this produces 5 runs — each using a different single fold for validation and the remaining 4 for training. The seed is reset before each fold run for reproducibility.
@@ -84,7 +82,7 @@ uv run audio-clf eval <config_path> <csv_path> <model_path> --eval-folds <fold_n
 Example:
 
 ```bash
-uv run audio-clf eval runs/configs/cnn_mfcc_20260316_193622.yaml runs/cnn_mfcc_eval_tracker.csv runs/checkpoints/cnn_mfcc_20260316_193622.pt --eval-folds 5
+uv run audio-clf eval runs/configs/cnn_mfcc_20260316_193622.yaml runs/eval_tracker.csv runs/checkpoints/cnn_mfcc_20260316_193622.pt --eval-folds 5
 ```
 
 The config and checkpoint must have matching stems (same training run). Eval folds must not overlap with the train or validation folds specified in the config. Evaluation artifacts (confusion matrix, classification report) are saved to `runs/artifacts/eval/<run_id>/`. A row is appended to the tracker CSV.
@@ -153,9 +151,9 @@ Tests marked `@pytest.mark.slow` load the full dataset. Don't run them routinely
 │   │   │                             # confusion_matrix_full.{npy,png}, confusion_matrix_category.{npy,png},
 │   │   │                             # classification_report.json
 │   │   └── eval/<run_id>/            # confusion_matrix.{npy,png}, classification_report.json
-│   ├── your_model_train_tracker.csv  # one per person, training runs (quick + CV folds)
-│   ├── your_model_eval_tracker.csv   # one per person, eval runs
-│   └── your_model_cross_val_tracker.csv  # one per person, CV summary stats
+│   ├── train_tracker.csv             # training runs (quick + CV folds)
+│   ├── eval_tracker.csv              # eval runs
+│   └── cross_val_tracker.csv         # CV summary stats
 │
 ├── tests/
 │   ├── test_preprocessing.py
@@ -292,7 +290,13 @@ run:
 
 ## Tracker CSVs
 
-Each team member maintains their own train, eval, and cross-validation tracker CSVs to avoid merge conflicts. These are append-only logs of every run. **The files must be created manually before running any command** — the pipeline appends to existing files and will error if they are missing. Rename to match your experiment (e.g. `cnn_mfcc_train_tracker.csv`) before use.
+Tracker CSVs are append-only logs of every run. **They must be created manually before running any command** — the pipeline appends to existing files and will error if they are missing.
+
+```bash
+touch runs/train_tracker.csv
+touch runs/eval_tracker.csv
+touch runs/cross_val_tracker.csv
+```
 
 Train CSV columns: `ts, run_id, avg_loss_last_train_epoch, avg_loss_val, accuracy_val_pct, cfg_path, model_path, loss_curve_path_png, accuracy_curve_path_png, cv_run_id`
 
