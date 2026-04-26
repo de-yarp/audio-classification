@@ -198,6 +198,9 @@ def training_loop(
     )
 
     net, cfg, device = _setup_model(cfg_dict)
+    print(
+        f"[TRAIN] Training started | epochs={cfg.num_epochs} | device={device} | run_id={run_id}"
+    )
 
     if isinstance(cfg, ConfigLSTM):
         emit(
@@ -284,6 +287,14 @@ def training_loop(
             device,
             emit,
         )
+        current_lr = optimizer.param_groups[0]["lr"]
+        print(
+            f"  epoch {epoch + 1:>3}/{cfg.num_epochs}"
+            f" | train_loss={avg_loss_last_train_epoch:.4f}"
+            f" | val_loss={avg_loss_val:.4f}"
+            f" | val_acc={accuracy_val_pct:.2f}%"
+            f" | lr={current_lr:.6f}"
+        )
 
         if epoch == cfg.num_epochs - 1:
             last_val_info_for_cms = cm_info
@@ -309,6 +320,9 @@ def training_loop(
             "accuracy_val_pct": round(accuracy_val_pct, 4),
             "parent_cv_run_id": cv_run_id,
         },
+    )
+    print(
+        f"[TRAIN] Finished | val_acc={accuracy_val_pct:.2f}% | val_loss={avg_loss_val:.4f}"
     )
 
     content = {

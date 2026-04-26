@@ -1,8 +1,9 @@
 from typing import Callable
-from sklearn.metrics import precision_recall_fscore_support
+
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
 
 from infra.data_models import ArgsCLI, AudioDataset, DatasetType
@@ -26,6 +27,7 @@ def evaluate_model(
         component=COMPONENT,
         event="start_eval",
     )
+    print(f"[EVAL] Evaluation started | run_id={run_id}")
 
     net, cfg, device = _setup_model(cfg_dict, args.model_path)
 
@@ -87,7 +89,9 @@ def evaluate_model(
     all_labels_np = torch.cat(all_labels).cpu().numpy()
 
     # Обчислюємо Precision, Recall та F1
-    p, r, f1, _ = precision_recall_fscore_support(all_labels_np, all_preds_np, average='macro', zero_division=0)
+    p, r, f1, _ = precision_recall_fscore_support(
+        all_labels_np, all_preds_np, average="macro", zero_division=0
+    )
 
     emit(
         level="INFO",
@@ -100,5 +104,13 @@ def evaluate_model(
             "recall_macro": round(r * 100, 4),
             "f1_macro": round(f1 * 100, 4),
         },
+    )
+    print(
+        f"[EVAL] Done"
+        f" | acc={accuracy_pct:.2f}%"
+        f" | loss={avg_loss:.4f}"
+        f" | precision={p * 100:.2f}%"
+        f" | recall={r * 100:.2f}%"
+        f" | f1={f1 * 100:.2f}%"
     )
     return all_preds_flat, all_labels_flat, eval_ds.class_names, content

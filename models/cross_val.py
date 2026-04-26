@@ -43,12 +43,17 @@ def cross_validation_loop(
     seed = cfg_dict["seed"]
 
     fold_combinations = _get_fold_combinations(cfg_dict)
+    n_folds = len(fold_combinations)
+    print(f"[CV] Cross-validation started | {n_folds} folds | seed={seed}")
     cv_train_info: list[dict] = []
     train_runs: list[TrainRunInfo] = []
     child_run_ids = []
 
     cfg_dict_child = cfg_dict.copy()
-    for folds_train, folds_val in fold_combinations:
+    for fold_idx, (folds_train, folds_val) in enumerate(fold_combinations, start=1):
+        print(
+            f"\n[CV] Fold {fold_idx}/{n_folds} | train_folds={folds_train} | val_folds={folds_val}"
+        )
         set_seed(seed)
         run_id_child = str(uuid.uuid4())
         emit_child = make_emit(logger, run_id_child)
@@ -86,6 +91,7 @@ def cross_validation_loop(
         event="finish_cross_validation",
         payload={"child_run_ids": child_run_ids},
     )
+    print(f"\n[CV] Cross-validation finished | {n_folds} folds completed")
 
     content = {
         "ts": now_ts_iso(),
