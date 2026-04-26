@@ -311,3 +311,5 @@ Cross-validation CSV columns: `ts, cv_run_id, child_run_ids, mean_accuracy, std_
 ## Logging
 
 All pipeline events are written as JSON lines to `logs/log.jsonl`. Each log entry includes a timestamp, run ID, component name, event type, and optional payload. Logs can be filtered by run ID using `parse_run_logs(run_id)` from `infra.log_utils`.
+
+The pipeline also prints human-readable progress to stdout during runs. For training, each epoch prints train loss, validation loss, validation accuracy, and current learning rate. For cross-validation, each fold is announced with its train/val fold split before training begins. Eval prints a summary line with accuracy, loss, and macro precision/recall/F1 on completion. These prints are separate from the structured log and require no configuration.
