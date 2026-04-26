@@ -41,6 +41,14 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
             "save_model": args.save_model,
         },
     )
+    cv_label = (
+        " (cross-val)"
+        if pipe_type == "train" and args.cross_val_csv_path is not None
+        else ""
+    )
+    print(
+        f"\n[PIPELINE] Starting {pipe_type}{cv_label} | run_id={run_id} | cfg={args.cfg_path}\n"
+    )
 
     cfg_dict_raw = load_yaml_config(args.cfg_path)
     cfg_dict_norm = normalize_and_validate_config(cfg_dict_raw, args.cfg_path)
@@ -100,3 +108,4 @@ def pipe_run(args: ArgsCLI, *, logger: logging.Logger, run_id: str) -> None:
             "elapsed_time": round((t2 - t1), 4),
         },
     )
+    print(f"\n[PIPELINE] Done | elapsed={round(t2 - t1, 2)}s\n")
